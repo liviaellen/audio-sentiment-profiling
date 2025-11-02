@@ -111,7 +111,7 @@ def get_rizz_status_text(score: float) -> str:
 def get_rizz_notification_message(score: float, emotions: list) -> str:
     """
     Generate a short notification message with rizz status and emotions.
-    Adds motivational messages for low rizz.
+    Adds motivational messages for low rizz and positive messages for high rizz.
 
     Args:
         score: Rizz score from -100 to 100
@@ -141,9 +141,17 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
     elif score <= 20:
         return f"⚡ Rizz: {score_text} 😐 | {emotion_str}"
 
-    # High rizz - positive
+    # High rizz - positive message
     else:
-        return f"⚡ Rizz: {score_text} 😎 | {emotion_str}"
+        high_rizz_messages = [
+            "Killing it! 🔥",
+            "You're on fire! ⚡",
+            "Peak vibes! 💯",
+            "Keep it up! 🚀",
+            "Boss mode! 😎"
+        ]
+        positive = random.choice(high_rizz_messages)
+        return f"⚡ Rizz: {score_text} 😎 | {emotion_str} | {positive}"
 
 
 # Load emotion notification configuration
@@ -1104,7 +1112,7 @@ async def root():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Omi Audio Streaming Service</title>
+        <title>Rizz Meter - Emotion AI</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             body {{
@@ -1362,7 +1370,7 @@ async def root():
     </head>
     <body>
         <div class="container">
-            <h1>🎤 Omi Audio Streaming Service <span class="status online">ONLINE</span></h1>
+            <h1>⚡ Rizz Meter <span class="status online">ONLINE</span></h1>
 
             <div class="config-section">
                 <h3>⚙️ Configuration Status</h3>
@@ -1408,6 +1416,17 @@ async def root():
                 <p style="color: rgba(255,255,255,0.9); font-size: 12px; text-align: center; margin: 10px 0 0 0;">
                     {'😎 Positive Vibes!' if audio_stats.get('rizz_score', 0) > 20 else '😐 Neutral Energy' if audio_stats.get('rizz_score', 0) >= -20 else '😔 Negative Energy'}
                 </p>
+                {f'''
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.3);">
+                    <p style="color: rgba(255,255,255,0.8); font-size: 11px; margin: 5px 0;">
+                        <strong>Last Updated:</strong> {audio_stats['last_request_time']}
+                    </p>
+                    <p style="color: rgba(255,255,255,0.8); font-size: 11px; margin: 5px 0;">
+                        <strong>User:</strong> {audio_stats['last_uid'][:4] + '****' if audio_stats['last_uid'] and len(audio_stats['last_uid']) > 4 else audio_stats['last_uid']}
+                    </p>
+                    {f'<p style="color: rgba(255,255,255,0.8); font-size: 11px; margin: 5px 0;"><strong>Detected:</strong> {", ".join([e.split(" (")[0] for e in audio_stats["recent_emotions"][:3]])}</p>' if audio_stats['recent_emotions'] else ''}
+                </div>
+                ''' if audio_stats['last_request_time'] else ''}
             </div>
 
             {emotion_stats_html}
