@@ -748,6 +748,7 @@ async def handle_audio_stream(
                     # Check emotion triggers and send notification
                     # Use config default if send_notification not explicitly provided
                     should_notify = send_notification if send_notification is not None else EMOTION_CONFIG.get('notification_enabled', False)
+                    print(f"🔔 Notification check: should_notify={should_notify}, has_predictions={bool(hume_results.get('predictions'))}")
 
                     if should_notify and hume_results.get('predictions'):
                         # Use emotion filters from parameter, or fall back to config
@@ -769,6 +770,7 @@ async def handle_audio_stream(
                             hume_results['predictions'],
                             filters_dict
                         )
+                        print(f"📊 Trigger check result: triggered={trigger_result['triggered']}, count={trigger_result['total_triggers']}")
 
                         if trigger_result['triggered']:
                             print(f"🔔 Emotion trigger detected! {trigger_result['total_triggers']} emotions matched")
