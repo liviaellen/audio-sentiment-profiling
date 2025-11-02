@@ -1,0 +1,12 @@
+{
+  "notification_enabled": true,
+  "emotion_thresholds": {
+    "Anger": 0.7,
+    "Sadness": 0.6,
+    "Distress": 0.65,
+    "Anxiety": 0.7,
+    "Fear": 0.75
+  },
+  "notification_message_template": "🎭 Emotion Alert: Detected {emotions}",
+  "description": "Configure which emotions trigger notifications and their thresholds"
+}

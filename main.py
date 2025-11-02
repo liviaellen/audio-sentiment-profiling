@@ -30,6 +30,50 @@ audio_stats = {
     "recent_emotions": []
 }
 
+# Load emotion notification configuration
+def load_emotion_config():
+    """Load emotion notification configuration from file or environment"""
+    config_file = Path("emotion_config.json")
+
+    # Default configuration
+    default_config = {
+        "notification_enabled": True,
+        "emotion_thresholds": {
+            "Anger": 0.7,
+            "Sadness": 0.6,
+            "Distress": 0.65,
+            "Anxiety": 0.7,
+            "Fear": 0.75
+        }
+    }
+
+    # Try to load from file
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                print(f"✓ Loaded emotion config: {config.get('emotion_thresholds')}")
+                return config
+        except Exception as e:
+            print(f"Warning: Could not load emotion_config.json: {e}")
+            return default_config
+
+    # Try to load from environment variable
+    env_config = os.getenv('EMOTION_NOTIFICATION_CONFIG')
+    if env_config:
+        try:
+            config = json.loads(env_config)
+            print(f"✓ Loaded emotion config from env: {config.get('emotion_thresholds')}")
+            return config
+        except Exception as e:
+            print(f"Warning: Could not parse EMOTION_NOTIFICATION_CONFIG: {e}")
+
+    print(f"ℹ️  Using default emotion config: {default_config['emotion_thresholds']}")
+    return default_config
+
+# Load configuration at startup
+EMOTION_CONFIG = load_emotion_config()
+
 
 def create_wav_header(sample_rate: int, data_size: int) -> bytes:
     """
@@ -609,8 +653,8 @@ async def handle_audio_stream(
     uid: str = Query(..., description="User ID"),
     analyze_emotion: bool = Query(True, description="Whether to analyze emotions with Hume AI"),
     save_to_gcs: bool = Query(True, description="Whether to save audio to Google Cloud Storage"),
-    send_notification: bool = Query(False, description="Whether to send Omi notification for detected emotions"),
-    emotion_filters: Optional[str] = Query(None, description="JSON string of emotion filters, e.g. {\"Anger\":0.7,\"Sadness\":0.6}")
+    send_notification: Optional[bool] = Query(None, description="Override notification setting (uses config default if not specified)"),
+    emotion_filters: Optional[str] = Query(None, description="Override emotion filters (uses config default if not specified)")
 ):
     """
     Endpoint to receive audio bytes from Omi device, optionally analyze with Hume AI and/or save to GCS.
@@ -694,16 +738,24 @@ async def handle_audio_stream(
                     if recent_emotions:
                         audio_stats["recent_emotions"] = recent_emotions
 
-                    # Check emotion triggers and send notification if requested
-                    if send_notification and hume_results.get('predictions'):
-                        # Parse emotion filters if provided
+                    # Check emotion triggers and send notification
+                    # Use config default if send_notification not explicitly provided
+                    should_notify = send_notification if send_notification is not None else EMOTION_CONFIG.get('notification_enabled', False)
+
+                    if should_notify and hume_results.get('predictions'):
+                        # Use emotion filters from parameter, or fall back to config
                         filters_dict = None
                         if emotion_filters:
                             try:
                                 filters_dict = json.loads(emotion_filters)
-                                print(f"Using emotion filters: {filters_dict}")
+                                print(f"Using custom emotion filters: {filters_dict}")
                             except json.JSONDecodeError as e:
                                 print(f"Warning: Invalid emotion_filters JSON: {e}")
+                                filters_dict = EMOTION_CONFIG.get('emotion_thresholds')
+                        else:
+                            # Use config defaults
+                            filters_dict = EMOTION_CONFIG.get('emotion_thresholds')
+                            print(f"Using config emotion filters: {filters_dict}")
 
                         # Check triggers
                         trigger_result = check_emotion_triggers(
@@ -1065,6 +1117,73 @@ async def analyze_text_emotion(
         raise HTTPException(status_code=400, detail="Invalid JSON in request body")
     except Exception as e:
         print(f"Error analyzing text: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/emotion-config")
+async def get_emotion_config():
+    """Get current emotion notification configuration"""
+    return {
+        "current_config": EMOTION_CONFIG,
+        "description": "Automatic notification settings for detected emotions"
+    }
+
+
+@app.post("/emotion-config")
+async def update_emotion_config(request: Request):
+    """
+    Update emotion notification configuration
+
+    Body (JSON):
+    {
+        "notification_enabled": true,
+        "emotion_thresholds": {
+            "Anger": 0.7,
+            "Sadness": 0.6
+        }
+    }
+    """
+    global EMOTION_CONFIG
+
+    try:
+        new_config = await request.json()
+
+        # Validate config
+        if "notification_enabled" in new_config:
+            if not isinstance(new_config["notification_enabled"], bool):
+                raise HTTPException(status_code=400, detail="notification_enabled must be boolean")
+
+        if "emotion_thresholds" in new_config:
+            if not isinstance(new_config["emotion_thresholds"], dict):
+                raise HTTPException(status_code=400, detail="emotion_thresholds must be a dict")
+
+            # Validate thresholds are numbers between 0 and 1
+            for emotion, threshold in new_config["emotion_thresholds"].items():
+                if not isinstance(threshold, (int, float)) or threshold < 0 or threshold > 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Threshold for {emotion} must be between 0 and 1"
+                    )
+
+        # Update configuration
+        EMOTION_CONFIG.update(new_config)
+
+        # Save to file
+        config_file = Path("emotion_config.json")
+        with open(config_file, 'w') as f:
+            json.dump(EMOTION_CONFIG, f, indent=2)
+
+        print(f"✓ Updated emotion config: {EMOTION_CONFIG}")
+
+        return {
+            "message": "Configuration updated successfully",
+            "new_config": EMOTION_CONFIG
+        }
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in request body")
+    except Exception as e:
+        print(f"Error updating config: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
