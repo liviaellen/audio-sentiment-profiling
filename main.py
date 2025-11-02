@@ -43,7 +43,7 @@ audio_stats = {
     "last_uid": None,
     "recent_emotions": [],
     "emotion_counts": {},  # Track count of each emotion detected
-    "rizz_score": 0  # Rizz meter: -100 to 100
+    "rizz_score": 75  # Rizz meter: 0 to 100 (starts at 75)
 }
 
 # Emotion categories for Rizz Meter
@@ -68,7 +68,7 @@ def update_rizz_score(emotions: list):
     """
     Update rizz score based on detected emotions.
     Positive emotions add points, negative emotions subtract.
-    Score ranges from -100 to 100.
+    Score ranges from 0 to 100 (starts at 75).
 
     Args:
         emotions: List of emotion dicts with 'name' and 'score'
@@ -89,8 +89,8 @@ def update_rizz_score(emotions: list):
             adjustment -= emotion_score * 10  # Max -10 per emotion
         # Neutral emotions don't change the score
 
-    # Update the score and clamp to -100 to 100 range
-    audio_stats["rizz_score"] = max(-100, min(100, audio_stats["rizz_score"] + adjustment))
+    # Update the score and clamp to 0 to 100 range
+    audio_stats["rizz_score"] = max(0, min(100, audio_stats["rizz_score"] + adjustment))
 
 
 def get_rizz_status_text(score: float) -> str:
@@ -98,14 +98,14 @@ def get_rizz_status_text(score: float) -> str:
     Get the rizz status text based on score.
 
     Args:
-        score: Rizz score from -100 to 100
+        score: Rizz score from 0 to 100
 
     Returns:
         Status text with emoji
     """
-    if score > 20:
+    if score > 80:
         return "😎 Positive Vibes!"
-    elif score >= -20:
+    elif score >= 40:
         return "😐 Neutral Energy"
     else:
         return "😔 Negative Energy"
@@ -117,7 +117,7 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
     Format: Rizz score + Inspirational message + Emotions
 
     Args:
-        score: Rizz score from -100 to 100
+        score: Rizz score from 0 to 100
         emotions: List of emotion names (top 3)
 
     Returns:
@@ -128,8 +128,8 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
     emotion_str = ", ".join(emotions)
     score_text = f"{score:.0f}%"
 
-    # Low rizz - motivational messages
-    if score < -20:
+    # Low rizz (< 40) - motivational messages
+    if score < 40:
         messages = [
             "Level up bro! 💪",
             "Time to bounce back! 🚀",
@@ -140,8 +140,8 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
         inspirational = random.choice(messages)
         return f"⚡ Rizz: {score_text} | {inspirational} | {emotion_str}"
 
-    # Medium rizz - neutral messages
-    elif score <= 20:
+    # Medium rizz (40-80) - neutral messages
+    elif score <= 80:
         messages = [
             "Stay balanced! 🎯",
             "Keep going! 💫",
@@ -152,7 +152,7 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
         inspirational = random.choice(messages)
         return f"⚡ Rizz: {score_text} | {inspirational} | {emotion_str}"
 
-    # High rizz - positive messages
+    # High rizz (> 80) - positive messages
     else:
         messages = [
             "Killing it! 🔥",
