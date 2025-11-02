@@ -1,0 +1,6 @@
+{
+  "notification_enabled": true,
+  "emotion_thresholds": {},
+  "notification_message_template": "🎭 Emotion Alert: Detected {emotions}",
+  "description": "Empty thresholds = notify for ALL emotions. To filter specific emotions, add them like: {\"Joy\": 0, \"Anger\": 0, \"Calmness\": 0}"
+}
