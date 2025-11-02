@@ -43,7 +43,8 @@ audio_stats = {
     "last_uid": None,
     "recent_emotions": [],
     "emotion_counts": {},  # Track count of each emotion detected
-    "rizz_score": 75  # Rizz meter: 0 to 100 (starts at 75)
+    "rizz_score": 75,  # Rizz meter: 0 to 100 (starts at 75)
+    "recent_notifications": []  # Track last 10 notifications sent
 }
 
 # Emotion categories for Rizz Meter
@@ -318,6 +319,18 @@ async def send_omi_notification(
 
         if response.status_code >= 200 and response.status_code < 300:
             print(f"✓ Sent Omi notification to user {uid}")
+
+            # Track notification in stats
+            from datetime import datetime, timezone
+            notification_data = {
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "uid": uid,
+                "message": message
+            }
+            audio_stats["recent_notifications"].insert(0, notification_data)
+            # Keep only last 10 notifications
+            audio_stats["recent_notifications"] = audio_stats["recent_notifications"][:10]
+
             return {
                 "success": True,
                 "message": "Notification sent to Omi"
@@ -1160,6 +1173,42 @@ async def root():
             </div>
         '''
 
+    # Build notifications HTML
+    notifications_html = ''
+    if audio_stats['recent_notifications']:
+        notification_items = []
+        for notif in audio_stats['recent_notifications'][:5]:
+            masked_uid = notif['uid'][:4] + '****' if len(notif['uid']) > 4 else notif['uid']
+            notification_items.append(f'''
+                <div style="background: rgba(255,255,255,0.2); padding: 10px; margin-bottom: 10px; border-radius: 5px; border-left: 3px solid rgba(255,255,255,0.5);">
+                    <p style="color: white; font-size: 13px; margin: 0 0 5px 0; font-weight: bold;">
+                        {notif['message']}
+                    </p>
+                    <p style="color: rgba(255,255,255,0.7); font-size: 11px; margin: 0;">
+                        <span style="margin-right: 10px;">🕒 {notif['timestamp']}</span>
+                        <span>👤 {masked_uid}</span>
+                    </p>
+                </div>
+            ''')
+
+        notifications_html = f'''
+            <div style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <h3 style="color: white; margin: 0 0 15px 0;">📱 Recent Notifications</h3>
+                <div style="background: rgba(255,255,255,0.1); border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto;">
+                    {''.join(notification_items)}
+                </div>
+            </div>
+        '''
+    else:
+        notifications_html = f'''
+            <div style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <h3 style="color: white; margin: 0 0 15px 0;">📱 Recent Notifications</h3>
+                <div style="background: rgba(255,255,255,0.1); border-radius: 8px; padding: 15px;">
+                    <p style="color: rgba(255,255,255,0.8); text-align: center; font-style: italic; margin: 0;">No notifications sent yet</p>
+                </div>
+            </div>
+        '''
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -1486,6 +1535,8 @@ async def root():
                 ''' if audio_stats['last_request_time'] else ''}
             </div>
 
+            {notifications_html}
+
             {emotion_stats_html}
 
             <div class="config-section">
@@ -1785,7 +1836,8 @@ async def reset_stats():
         "last_uid": None,
         "recent_emotions": [],
         "emotion_counts": {},
-        "rizz_score": 75
+        "rizz_score": 75,
+        "recent_notifications": []
     }
     return {"message": "Statistics reset successfully", "stats": audio_stats}
 

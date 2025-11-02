@@ -2,6 +2,14 @@
 
 A Python FastAPI service that receives real-time audio from Omi devices, analyzes emotions using Hume AI, sends automatic notifications, and provides a beautiful dashboard with emotion statistics.
 
+## 📸 Screenshots
+
+### Dashboard
+![Rizz Meter Dashboard](./rizzmeter.png)
+
+### Omi Mobile App Notification
+<img src="./omi phone ss.png" alt="Omi Phone Notification" width="300"/>
+
 ## ✨ Features
 
 - 🎤 **Real-time Audio Streaming** from Omi devices
