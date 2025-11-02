@@ -1460,16 +1460,15 @@ async def root():
             <div style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
                 <h3 style="color: white; margin: 0 0 15px 0;">⚡ Rizz Meter</h3>
                 <div style="background: rgba(255,255,255,0.2); border-radius: 20px; height: 40px; position: relative; overflow: hidden;">
-                    <div style="position: absolute; left: 50%; width: 2px; height: 100%; background: white; opacity: 0.5;"></div>
-                    {f'''<div style="position: absolute; left: 50%; width: {abs(audio_stats['rizz_score'])/2}%; height: 100%; background: {'linear-gradient(90deg, #4ade80, #22c55e)' if audio_stats['rizz_score'] >= 0 else 'linear-gradient(90deg, #f87171, #ef4444)'}; transition: all 0.5s ease;{' right: 50%;' if audio_stats['rizz_score'] < 0 else ''}"></div>''' if audio_stats.get('rizz_score') is not None else ''}
+                    {f'''<div style="position: absolute; left: 0; width: {audio_stats.get('rizz_score', 75)}%; height: 100%; background: {'linear-gradient(90deg, #4ade80, #22c55e)' if audio_stats.get('rizz_score', 75) >= 80 else 'linear-gradient(90deg, #60a5fa, #3b82f6)' if audio_stats.get('rizz_score', 75) >= 40 else 'linear-gradient(90deg, #f87171, #ef4444)'}; transition: all 0.5s ease;"></div>''' if audio_stats.get('rizz_score') is not None else ''}
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-top: 10px; color: white; font-size: 12px;">
-                    <span>-100%</span>
-                    <span style="font-size: 24px; font-weight: bold;">{audio_stats.get('rizz_score', 0):.1f}%</span>
-                    <span>+100%</span>
+                    <span>0%</span>
+                    <span style="font-size: 24px; font-weight: bold;">{audio_stats.get('rizz_score', 75):.1f}%</span>
+                    <span>100%</span>
                 </div>
                 <p style="color: rgba(255,255,255,0.9); font-size: 12px; text-align: center; margin: 10px 0 0 0;">
-                    {'😎 Positive Vibes!' if audio_stats.get('rizz_score', 0) > 20 else '😐 Neutral Energy' if audio_stats.get('rizz_score', 0) >= -20 else '😔 Negative Energy'}
+                    {'😎 Positive Vibes!' if audio_stats.get('rizz_score', 75) > 80 else '😐 Neutral Energy' if audio_stats.get('rizz_score', 75) >= 40 else '😔 Negative Energy'}
                 </p>
                 {f'''
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.3);">
@@ -1783,7 +1782,7 @@ async def reset_stats():
         "last_uid": None,
         "recent_emotions": [],
         "emotion_counts": {},
-        "rizz_score": 0
+        "rizz_score": 75
     }
     return {"message": "Statistics reset successfully", "stats": audio_stats}
 
