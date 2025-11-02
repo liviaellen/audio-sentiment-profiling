@@ -1423,8 +1423,11 @@ async def root():
     <body>
         <div class="container">
             <h1>⚡ Rizz Meter <span style="font-size: 0.5em; color: #666;">Omi + Hume</span> <span class="status online">ONLINE</span></h1>
-            <p style="text-align: center; color: #666; font-size: 16px; margin: -10px 0 30px 0; font-style: italic;">
+            <p style="text-align: center; color: #666; font-size: 16px; margin: -10px 0 5px 0; font-style: italic;">
                 Emotion detection based on your tone and speech prosody
+            </p>
+            <p style="text-align: center; color: #999; font-size: 13px; margin: 0 0 30px 0;">
+                Developer: Livia Ellen
             </p>
 
             <div class="config-section">
