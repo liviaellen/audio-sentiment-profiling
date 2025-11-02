@@ -327,16 +327,13 @@ def check_emotion_triggers(
                 })
                 continue
 
-            # Check if this emotion is in our filter list
+            # Check if this emotion is in our filter list (no threshold checking!)
             if emotion_name in emotion_filters:
-                threshold = emotion_filters[emotion_name]
-                if emotion_score >= threshold:
-                    triggered_emotions.append({
-                        "name": emotion_name,
-                        "score": emotion_score,
-                        "threshold": threshold,
-                        "time": prediction.get('time')
-                    })
+                triggered_emotions.append({
+                    "name": emotion_name,
+                    "score": emotion_score,
+                    "time": prediction.get('time')
+                })
 
     return {
         "triggered": len(triggered_emotions) > 0,
