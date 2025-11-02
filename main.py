@@ -39,8 +39,56 @@ audio_stats = {
     "last_request_time": None,
     "last_uid": None,
     "recent_emotions": [],
-    "emotion_counts": {}  # Track count of each emotion detected
+    "emotion_counts": {},  # Track count of each emotion detected
+    "rizz_score": 0  # Rizz meter: -100 to 100
 }
+
+# Emotion categories for Rizz Meter
+POSITIVE_EMOTIONS = {
+    "Joy", "Amusement", "Satisfaction", "Excitement", "Pride", "Triumph",
+    "Relief", "Romance", "Desire", "Admiration", "Adoration", "Love",
+    "Interest", "Realization", "Surprise"
+}
+
+NEGATIVE_EMOTIONS = {
+    "Anger", "Sadness", "Fear", "Disgust", "Anxiety", "Distress",
+    "Shame", "Guilt", "Embarrassment", "Contempt", "Disappointment",
+    "Pain", "Awkwardness", "Boredom", "Confusion", "Doubt", "Tiredness"
+}
+
+NEUTRAL_EMOTIONS = {
+    "Calmness", "Concentration", "Contemplation", "Determination"
+}
+
+
+def update_rizz_score(emotions: list):
+    """
+    Update rizz score based on detected emotions.
+    Positive emotions add points, negative emotions subtract.
+    Score ranges from -100 to 100.
+
+    Args:
+        emotions: List of emotion dicts with 'name' and 'score'
+    """
+    global audio_stats
+
+    # Calculate adjustment based on top 3 emotions
+    adjustment = 0
+    for emotion in emotions:
+        emotion_name = emotion['name']
+        emotion_score = emotion['score']  # 0-1 scale
+
+        if emotion_name in POSITIVE_EMOTIONS:
+            # Positive emotions add to rizz (scaled by emotion intensity)
+            adjustment += emotion_score * 10  # Max +10 per emotion
+        elif emotion_name in NEGATIVE_EMOTIONS:
+            # Negative emotions subtract from rizz
+            adjustment -= emotion_score * 10  # Max -10 per emotion
+        # Neutral emotions don't change the score
+
+    # Update the score and clamp to -100 to 100 range
+    audio_stats["rizz_score"] = max(-100, min(100, audio_stats["rizz_score"] + adjustment))
+
 
 # Load emotion notification configuration
 def load_emotion_config():
@@ -845,6 +893,11 @@ async def handle_audio_stream(
                                     if emotion_name not in audio_stats["emotion_counts"]:
                                         audio_stats["emotion_counts"][emotion_name] = 0
                                     audio_stats["emotion_counts"][emotion_name] += 1
+
+                                # Update rizz score based on detected emotions
+                                update_rizz_score(pred['top_3_emotions'])
+                                print(f"📊 Rizz Score updated: {audio_stats['rizz_score']:.1f}")
+
                                 break
                     if recent_emotions:
                         audio_stats["recent_emotions"] = recent_emotions
@@ -1278,10 +1331,26 @@ async def root():
             <div style="margin: 20px 0;">
                 <h3>📊 Last Activity</h3>
                 <p><strong>Time:</strong> {audio_stats['last_request_time']}</p>
-                <p><strong>User ID:</strong> {audio_stats['last_uid']}</p>
+                <p><strong>User ID:</strong> {audio_stats['last_uid'][:4] + '****' if audio_stats['last_uid'] and len(audio_stats['last_uid']) > 4 else audio_stats['last_uid']}</p>
                 {f'<div class="emotions">' + ''.join([f'<span class="emotion-tag">{e}</span>' for e in audio_stats['recent_emotions'][:5]]) + '</div>' if audio_stats['recent_emotions'] else ''}
             </div>
             ''' if audio_stats['last_request_time'] else '<p style="color: #666; margin: 20px 0;">No audio received yet. Waiting for Omi device to send data...</p>'}
+
+            <div style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <h3 style="color: white; margin: 0 0 15px 0;">⚡ Rizz Meter</h3>
+                <div style="background: rgba(255,255,255,0.2); border-radius: 20px; height: 40px; position: relative; overflow: hidden;">
+                    <div style="position: absolute; left: 50%; width: 2px; height: 100%; background: white; opacity: 0.5;"></div>
+                    {f'''<div style="position: absolute; left: 50%; width: {abs(audio_stats['rizz_score'])/2}%; height: 100%; background: {'linear-gradient(90deg, #4ade80, #22c55e)' if audio_stats['rizz_score'] >= 0 else 'linear-gradient(90deg, #f87171, #ef4444)'}; transition: all 0.5s ease;{' right: 50%;' if audio_stats['rizz_score'] < 0 else ''}"></div>''' if audio_stats.get('rizz_score') is not None else ''}
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 10px; color: white; font-size: 12px;">
+                    <span>-100%</span>
+                    <span style="font-size: 24px; font-weight: bold;">{audio_stats.get('rizz_score', 0):.1f}%</span>
+                    <span>+100%</span>
+                </div>
+                <p style="color: rgba(255,255,255,0.9); font-size: 12px; text-align: center; margin: 10px 0 0 0;">
+                    {'😎 Positive Vibes!' if audio_stats.get('rizz_score', 0) > 20 else '😐 Neutral Energy' if audio_stats.get('rizz_score', 0) >= -20 else '😔 Negative Energy'}
+                </p>
+            </div>
 
             {emotion_stats_html}
 
@@ -1581,7 +1650,8 @@ async def reset_stats():
         "last_request_time": None,
         "last_uid": None,
         "recent_emotions": [],
-        "emotion_counts": {}
+        "emotion_counts": {},
+        "rizz_score": 0
     }
     return {"message": "Statistics reset successfully", "stats": audio_stats}
 
