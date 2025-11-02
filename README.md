@@ -5,10 +5,10 @@ A Python FastAPI service that receives real-time audio from Omi devices, analyze
 ## 📸 Screenshots
 
 ### Dashboard
-![Rizz Meter Dashboard](./rizzmeter.png)
+![Rizz Meter Dashboard](./image/rizzmeter.png)
 
 ### Omi Mobile App Notification
-<img src="./omi phone ss.png" alt="Omi Phone Notification" width="300"/>
+<img src="./image/omi phone ss.png" alt="Omi Phone Notification" width="300"/>
 
 ## ✨ Features
 
