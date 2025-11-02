@@ -20,6 +20,17 @@ import uvicorn
 
 app = FastAPI(title="Omi Audio Streaming Service with Hume AI")
 
+
+# Startup event to launch background tasks
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background tasks on server startup"""
+    import asyncio
+
+    print("🚀 Starting emotion memory background task (runs every 1 hour)...")
+    asyncio.create_task(emotion_memory_background_task())
+
+
 # Store recent audio processing stats
 audio_stats = {
     "total_requests": 0,
@@ -285,6 +296,108 @@ async def create_omi_memory(
             "success": False,
             "error": str(e)
         }
+
+
+def generate_emotion_summary() -> Dict[str, Any]:
+    """
+    Generate a summary of top 5 emotions from statistics.
+
+    Returns:
+        Dict with summary text and top emotions
+    """
+    if not audio_stats["emotion_counts"]:
+        return {
+            "success": False,
+            "error": "No emotion data available"
+        }
+
+    # Get top 5 emotions
+    sorted_emotions = sorted(
+        audio_stats["emotion_counts"].items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:5]
+
+    total_count = sum(audio_stats["emotion_counts"].values())
+
+    # Build summary text
+    emotion_list = []
+    emotions_data = []
+
+    for emotion, count in sorted_emotions:
+        percentage = (count / total_count * 100)
+        emotion_list.append(f"{emotion} ({percentage:.1f}%)")
+        emotions_data.append({
+            "name": emotion,
+            "score": percentage / 100,  # Convert to 0-1 scale
+            "count": count
+        })
+
+    summary_text = f"📊 Emotion Summary - Top 5 emotions detected: {', '.join(emotion_list)}"
+
+    return {
+        "success": True,
+        "summary": summary_text,
+        "emotions": emotions_data,
+        "total_detections": total_count
+    }
+
+
+async def save_emotion_memory(uid: Optional[str] = None):
+    """
+    Save current emotion statistics to Omi memories.
+
+    Args:
+        uid: User ID to save memory for. If None, uses last active user.
+    """
+    # Use last active user if no uid provided
+    target_uid = uid or audio_stats.get("last_uid")
+
+    if not target_uid:
+        print("⚠️ No user ID available for emotion memory")
+        return {
+            "success": False,
+            "error": "No user ID available"
+        }
+
+    # Generate emotion summary
+    summary = generate_emotion_summary()
+
+    if not summary["success"]:
+        print(f"⚠️ Cannot create memory: {summary['error']}")
+        return summary
+
+    # Create memory in Omi
+    result = await create_omi_memory(
+        uid=target_uid,
+        text=summary["summary"],
+        emotions=summary["emotions"]
+    )
+
+    return result
+
+
+async def emotion_memory_background_task():
+    """Background task that saves emotion summaries every hour"""
+    import asyncio
+
+    while True:
+        try:
+            # Wait 1 hour (3600 seconds)
+            await asyncio.sleep(3600)
+
+            print("⏰ Running hourly emotion memory save...")
+            result = await save_emotion_memory()
+
+            if result.get("success"):
+                print("✓ Hourly emotion memory saved successfully")
+            else:
+                print(f"⚠️ Hourly emotion memory save failed: {result.get('error')}")
+
+        except Exception as e:
+            print(f"Error in emotion memory background task: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 def check_emotion_triggers(
@@ -1102,6 +1215,33 @@ async def root():
                 }}
             }}
 
+            // Save emotion memory to Omi
+            async function saveEmotionMemory() {{
+                const statusEl = document.getElementById('memoryStatus');
+                statusEl.textContent = '💾 Saving emotion summary to memories...';
+                statusEl.style.color = '#666';
+
+                try {{
+                    const response = await fetch('/save-emotion-memory', {{
+                        method: 'POST'
+                    }});
+
+                    const data = await response.json();
+
+                    if (response.ok) {{
+                        statusEl.textContent = '✅ Emotion summary saved to memories!';
+                        statusEl.style.color = '#28a745';
+                        setTimeout(() => {{ statusEl.textContent = ''; }}, 3000);
+                    }} else {{
+                        statusEl.textContent = `❌ Error: ${{data.error || 'Failed to save'}}`;
+                        statusEl.style.color = '#dc3545';
+                    }}
+                }} catch (error) {{
+                    statusEl.textContent = '❌ Error saving to memories';
+                    statusEl.style.color = '#dc3545';
+                }}
+            }}
+
             // Load config on page load
             window.addEventListener('DOMContentLoaded', loadCurrentConfig);
 
@@ -1264,9 +1404,11 @@ async def root():
 
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button class="refresh-btn" onclick="refreshPage()">🔄 Refresh Status</button>
+                <button class="refresh-btn" onclick="saveEmotionMemory()" style="background: #28a745;">💾 Save to Memories</button>
                 <button class="refresh-btn" onclick="resetStats()" style="background: #dc3545;">🗑️ Reset Statistics</button>
             </div>
-            <p style="color: #666; font-size: 12px; margin-top: 20px;">Page auto-refreshes every 10 seconds</p>
+            <p id="memoryStatus" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
+            <p style="color: #666; font-size: 12px; margin-top: 10px;">Page auto-refreshes every 10 seconds</p>
         </div>
     </body>
     </html>
@@ -1442,6 +1584,34 @@ async def reset_stats():
         "emotion_counts": {}
     }
     return {"message": "Statistics reset successfully", "stats": audio_stats}
+
+
+@app.post("/save-emotion-memory")
+async def manual_save_emotion_memory(uid: Optional[str] = Query(None, description="User ID (optional)")):
+    """
+    Manually save current emotion statistics to Omi memories.
+
+    Query Parameters:
+        - uid: User ID (optional, uses last active user if not provided)
+    """
+    result = await save_emotion_memory(uid)
+
+    if result.get("success"):
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Emotion memory saved successfully",
+                "result": result
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "message": "Failed to save emotion memory",
+                "error": result.get("error")
+            }
+        )
 
 
 @app.get("/health")
