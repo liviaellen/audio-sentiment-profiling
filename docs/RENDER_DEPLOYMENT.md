@@ -70,7 +70,7 @@ Scroll down to **Environment Variables** section and add:
 
 ### Required:
 - **Key**: `HUME_API_KEY`
-- **Value**: Your Hume AI API key (e.g., `GSyuRl8s3OKwcz1IgUKPruLH02Ppi4rQd8WTKh0LZ67fclpx`)
+- **Value**: Your Hume AI API key (from your `.env` file)
 
 ### Optional (for Google Cloud Storage):
 - **Key**: `GCS_BUCKET_NAME`
