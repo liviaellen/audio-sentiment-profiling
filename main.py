@@ -36,16 +36,10 @@ def load_emotion_config():
     """Load emotion notification configuration from file or environment"""
     config_file = Path("emotion_config.json")
 
-    # Default configuration
+    # Default configuration - empty thresholds = notify for ALL emotions
     default_config = {
         "notification_enabled": True,
-        "emotion_thresholds": {
-            "Anger": 0.7,
-            "Sadness": 0.6,
-            "Distress": 0.65,
-            "Anxiety": 0.7,
-            "Fear": 0.75
-        }
+        "emotion_thresholds": {}
     }
 
     # Try to load from file
