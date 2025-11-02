@@ -1,17 +1,17 @@
 {
   "notification_enabled": true,
   "emotion_thresholds": {
-    "Joy": 0.17,
-    "Amusement": 0.17,
-    "Satisfaction": 0.17,
-    "Excitement": 0.17,
-    "Desire": 0.17,
-    "Anger": 0.17,
-    "Sadness": 0.17,
-    "Distress": 0.17,
-    "Anxiety": 0.17,
-    "Fear": 0.17
+    "Joy": 0.0,
+    "Amusement": 0.0,
+    "Satisfaction": 0.0,
+    "Excitement": 0.0,
+    "Desire": 0.0,
+    "Anger": 0.0,
+    "Sadness": 0.0,
+    "Distress": 0.0,
+    "Anxiety": 0.0,
+    "Fear": 0.0
   },
   "notification_message_template": "🎭 Emotion Alert: Detected {emotions}",
-  "description": "Configure which emotions trigger notifications and their thresholds. Low threshold (0.17) = very sensitive detection"
+  "description": "Notify when these emotions appear in top 3 detected emotions (0.0 = any score)"
 }
