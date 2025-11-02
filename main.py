@@ -1032,6 +1032,22 @@ async def root():
             function refreshPage() {{
                 location.reload();
             }}
+
+            async function resetStats() {{
+                if (confirm('Are you sure you want to reset all statistics? This cannot be undone.')) {{
+                    try {{
+                        const response = await fetch('/reset-stats', {{
+                            method: 'POST'
+                        }});
+                        const data = await response.json();
+                        alert('Statistics reset successfully!');
+                        location.reload();
+                    }} catch (error) {{
+                        alert('Error resetting statistics: ' + error.message);
+                    }}
+                }}
+            }}
+
             // Auto-refresh every 10 seconds
             setTimeout(refreshPage, 10000);
         </script>
@@ -1100,7 +1116,10 @@ async def root():
                 </ol>
             </div>
 
-            <button class="refresh-btn" onclick="refreshPage()">🔄 Refresh Status</button>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="refresh-btn" onclick="refreshPage()">🔄 Refresh Status</button>
+                <button class="refresh-btn" onclick="resetStats()" style="background: #dc3545;">🗑️ Reset Statistics</button>
+            </div>
             <p style="color: #666; font-size: 12px; margin-top: 20px;">Page auto-refreshes every 10 seconds</p>
         </div>
     </body>
@@ -1261,6 +1280,22 @@ async def update_emotion_config(request: Request):
     except Exception as e:
         print(f"Error updating config: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.post("/reset-stats")
+async def reset_stats():
+    """Reset all statistics"""
+    global audio_stats
+    audio_stats = {
+        "total_requests": 0,
+        "successful_analyses": 0,
+        "failed_analyses": 0,
+        "last_request_time": None,
+        "last_uid": None,
+        "recent_emotions": [],
+        "emotion_counts": {}
+    }
+    return {"message": "Statistics reset successfully", "stats": audio_stats}
 
 
 @app.get("/health")
