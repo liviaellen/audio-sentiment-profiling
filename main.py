@@ -6,17 +6,29 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Request, Query, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from google.cloud import storage
 from google.oauth2 import service_account
 from hume import AsyncHumeClient
-from hume.expression_measurement.stream import Config
-from hume.expression_measurement.stream.socket_client import StreamConnectOptions
-from hume.expression_measurement.stream.types import StreamProsody
+from hume.expression_measurement.stream.stream.types import Config
 import uvicorn
 
 app = FastAPI(title="Omi Audio Streaming Service with Hume AI")
+
+# Store recent audio processing stats
+audio_stats = {
+    "total_requests": 0,
+    "successful_analyses": 0,
+    "failed_analyses": 0,
+    "last_request_time": None,
+    "last_uid": None,
+    "recent_emotions": []
+}
 
 
 def create_wav_header(sample_rate: int, data_size: int) -> bytes:
@@ -93,9 +105,301 @@ def upload_to_gcs(file_path: str, bucket_name: str, destination_blob_name: str) 
     return f"gs://{bucket_name}/{destination_blob_name}"
 
 
+async def send_omi_notification(
+    uid: str,
+    message: str
+) -> Dict[str, Any]:
+    """
+    Send a direct notification to Omi user.
+
+    Args:
+        uid: Omi user ID
+        message: The notification message
+
+    Returns:
+        Dict with success status and response
+    """
+    omi_app_id = os.getenv('OMI_APP_ID')
+    omi_api_key = os.getenv('OMI_API_KEY')
+
+    if not omi_app_id or not omi_api_key:
+        return {
+            "success": False,
+            "error": "OMI_APP_ID or OMI_API_KEY not configured"
+        }
+
+    try:
+        import httpx
+        from urllib.parse import quote
+
+        # Make API request to Omi notification endpoint
+        url = f"https://api.omi.me/v2/integrations/{omi_app_id}/notification?uid={quote(uid)}&message={quote(message)}"
+        headers = {
+            "Authorization": f"Bearer {omi_api_key}",
+            "Content-Type": "application/json",
+            "Content-Length": "0"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, timeout=30.0)
+
+        if response.status_code >= 200 and response.status_code < 300:
+            print(f"✓ Sent Omi notification to user {uid}")
+            return {
+                "success": True,
+                "message": "Notification sent to Omi"
+            }
+        else:
+            error_msg = f"Omi API error: {response.status_code} - {response.text}"
+            print(f"❌ {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    except Exception as e:
+        print(f"Error sending Omi notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+async def create_omi_memory(
+    uid: str,
+    text: str,
+    emotions: list,
+    timestamp: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create a memory in Omi based on detected emotions.
+
+    Args:
+        uid: Omi user ID
+        text: The emotion summary text to save
+        emotions: List of detected emotions
+        timestamp: Optional timestamp
+
+    Returns:
+        Dict with success status and response
+    """
+    omi_app_id = os.getenv('OMI_APP_ID')
+    omi_api_key = os.getenv('OMI_API_KEY')
+
+    if not omi_app_id or not omi_api_key:
+        return {
+            "success": False,
+            "error": "OMI_APP_ID or OMI_API_KEY not configured"
+        }
+
+    try:
+        import httpx
+        from datetime import datetime, timezone
+
+        # Format emotions into a readable string
+        emotion_list = ", ".join([f"{e['name']} ({e['score']:.2f})" for e in emotions[:3]])
+
+        # Create memory data
+        memory_data = {
+            "memories": [
+                {
+                    "content": f"Emotion detected: {emotion_list}",
+                    "tags": ["emotion", "audio_analysis", emotions[0]['name'].lower()]
+                }
+            ],
+            "text": text,
+            "text_source": "other",
+            "text_source_spec": "emotion_ai_analysis"
+        }
+
+        # Make API request to Omi
+        url = f"https://api.omi.me/v2/integrations/{omi_app_id}/user/memories?uid={uid}"
+        headers = {
+            "Authorization": f"Bearer {omi_api_key}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=memory_data, headers=headers, timeout=30.0)
+
+        if response.status_code == 200:
+            print(f"✓ Created Omi memory for user {uid}")
+            return {
+                "success": True,
+                "message": "Memory created in Omi"
+            }
+        else:
+            error_msg = f"Omi API error: {response.status_code} - {response.text}"
+            print(f"❌ {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    except Exception as e:
+        print(f"Error creating Omi memory: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+def check_emotion_triggers(
+    predictions: list,
+    emotion_filters: Optional[Dict[str, float]] = None
+) -> Dict[str, Any]:
+    """
+    Check if any emotions meet the threshold criteria.
+
+    Args:
+        predictions: List of emotion predictions from Hume
+        emotion_filters: Dict of {emotion_name: threshold} to filter by
+                        Example: {"Anger": 0.7, "Sadness": 0.6}
+                        If None, returns all emotions
+
+    Returns:
+        Dict with triggered emotions and details
+    """
+    triggered_emotions = []
+
+    for prediction in predictions:
+        emotions = prediction.get('emotions', [])
+
+        for emotion in emotions:
+            emotion_name = emotion['name']
+            emotion_score = emotion['score']
+
+            # If no filters, include all
+            if not emotion_filters:
+                triggered_emotions.append({
+                    "name": emotion_name,
+                    "score": emotion_score,
+                    "time": prediction.get('time')
+                })
+                continue
+
+            # Check if this emotion is in our filter list
+            if emotion_name in emotion_filters:
+                threshold = emotion_filters[emotion_name]
+                if emotion_score >= threshold:
+                    triggered_emotions.append({
+                        "name": emotion_name,
+                        "score": emotion_score,
+                        "threshold": threshold,
+                        "time": prediction.get('time')
+                    })
+
+    return {
+        "triggered": len(triggered_emotions) > 0,
+        "emotions": triggered_emotions,
+        "total_triggers": len(triggered_emotions)
+    }
+
+
+async def analyze_text_with_hume(text: str) -> Dict[str, Any]:
+    """
+    Analyze text with Hume AI Language model for emotional content.
+
+    This analyzes emotion from the text content itself (word choice, phrasing, etc.)
+    Different from prosody which analyzes speech tone/pitch.
+
+    Args:
+        text: The text to analyze (e.g., transcription from speech-to-text)
+
+    Returns:
+        Dict containing emotion predictions for the text
+    """
+    hume_api_key = os.getenv('HUME_API_KEY')
+    if not hume_api_key:
+        raise ValueError("HUME_API_KEY environment variable not set")
+
+    try:
+        from hume.expression_measurement.stream.stream.types import StreamLanguage
+
+        client = AsyncHumeClient(api_key=hume_api_key)
+        # Config with language model for text emotion
+        model_config = Config(language=StreamLanguage())
+
+        async with client.expression_measurement.stream.connect() as socket:
+            result = await socket.send_text(text, config=model_config)
+
+            # Debug output
+            print(f"Text analysis result type: {type(result)}")
+
+            # Check for errors
+            if hasattr(result, 'error'):
+                return {
+                    "success": False,
+                    "error": f"Hume API error: {result.error}",
+                    "predictions": []
+                }
+
+            # Extract language predictions
+            if result and hasattr(result, 'language') and result.language:
+                lang_preds = result.language.predictions
+                print(f"✓ Got {len(lang_preds)} text emotion predictions")
+
+                predictions = []
+                for prediction in lang_preds:
+                    # Sort emotions by score (highest first)
+                    sorted_emotions = sorted(
+                        prediction.emotions,
+                        key=lambda e: e.score,
+                        reverse=True
+                    )
+
+                    pred_data = {
+                        "text": prediction.text if hasattr(prediction, 'text') else None,
+                        "position": {
+                            "begin": prediction.position.begin if hasattr(prediction, 'position') else None,
+                            "end": prediction.position.end if hasattr(prediction, 'position') else None
+                        },
+                        "emotions": [
+                            {"name": emotion.name, "score": emotion.score}
+                            for emotion in sorted_emotions
+                        ],
+                        "top_3_emotions": [
+                            {"name": emotion.name, "score": emotion.score}
+                            for emotion in sorted_emotions[:3]
+                        ]
+                    }
+                    predictions.append(pred_data)
+
+                return {
+                    "success": True,
+                    "predictions": predictions,
+                    "total_predictions": len(predictions),
+                    "analyzed_text": text
+                }
+            else:
+                error_msg = "No language predictions returned from Hume API"
+                print(f"❌ {error_msg}")
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "predictions": []
+                }
+
+    except Exception as e:
+        print(f"Error analyzing text with Hume: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "predictions": []
+        }
+
+
 async def analyze_audio_with_hume(wav_file_path: str) -> Dict[str, Any]:
     """
     Analyze audio file with Hume AI Speech Prosody model.
+
+    Automatically chunks audio >5 seconds into smaller segments.
 
     Args:
         wav_file_path: Path to the WAV audio file
@@ -108,20 +412,157 @@ async def analyze_audio_with_hume(wav_file_path: str) -> Dict[str, Any]:
         raise ValueError("HUME_API_KEY environment variable not set")
 
     try:
+        from pydub import AudioSegment
+
+        # Load audio to get actual duration
+        audio = AudioSegment.from_wav(wav_file_path)
+        duration_ms = len(audio)
+        duration_seconds = duration_ms / 1000.0
+
+        print(f"Audio duration: {duration_ms}ms ({duration_seconds:.2f} seconds)")
+
+        # Hume WebSocket API limit: 5000ms (5 seconds)
+        MAX_CHUNK_MS = 4500  # Use 4.5s to leave safety margin
+
+        # If audio is within limit, send as-is
+        if duration_ms <= 5000:
+            print(f"✓ Audio is within 5s limit, analyzing directly")
+            return await _analyze_single_audio(wav_file_path, hume_api_key)
+
+        # Audio is too long, need to chunk
+        print(f"⚠️  Audio is {duration_seconds:.1f}s, chunking into 4.5s segments...")
+
+        chunks_data = []
+        chunk_files = []
+
+        try:
+            # Split audio into chunks
+            num_chunks = (duration_ms + MAX_CHUNK_MS - 1) // MAX_CHUNK_MS  # Ceiling division
+            print(f"   Splitting into {num_chunks} chunks")
+
+            for i in range(0, duration_ms, MAX_CHUNK_MS):
+                start_ms = i
+                end_ms = min(i + MAX_CHUNK_MS, duration_ms)
+
+                chunk = audio[start_ms:end_ms]
+                chunk_duration = len(chunk)
+
+                # Save chunk to temporary file
+                chunk_path = f"{wav_file_path}.chunk{i // MAX_CHUNK_MS}.wav"
+                chunk.export(chunk_path, format="wav")
+                chunk_files.append(chunk_path)
+
+                print(f"   Chunk {i // MAX_CHUNK_MS + 1}/{num_chunks}: {start_ms}ms-{end_ms}ms ({chunk_duration}ms)")
+
+                # Analyze chunk
+                chunk_result = await _analyze_single_audio(chunk_path, hume_api_key)
+
+                if chunk_result.get('success'):
+                    # Adjust time offsets for each prediction
+                    for pred in chunk_result['predictions']:
+                        pred['time']['begin'] = pred['time']['begin'] + (start_ms / 1000.0) if pred['time']['begin'] else None
+                        pred['time']['end'] = pred['time']['end'] + (start_ms / 1000.0) if pred['time']['end'] else None
+                        pred['chunk_index'] = i // MAX_CHUNK_MS
+
+                    chunks_data.extend(chunk_result['predictions'])
+                else:
+                    print(f"   ⚠️  Chunk {i // MAX_CHUNK_MS + 1} analysis failed: {chunk_result.get('error')}")
+
+            # Combine results from all chunks
+            if chunks_data:
+                return {
+                    "success": True,
+                    "predictions": chunks_data,
+                    "total_predictions": len(chunks_data),
+                    "total_duration_seconds": duration_seconds,
+                    "num_chunks": num_chunks,
+                    "chunked": True
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "All chunks failed to analyze",
+                    "predictions": [],
+                    "debug_info": {
+                        "num_chunks": num_chunks,
+                        "total_duration_seconds": duration_seconds
+                    }
+                }
+
+        finally:
+            # Clean up chunk files
+            for chunk_file in chunk_files:
+                try:
+                    if Path(chunk_file).exists():
+                        Path(chunk_file).unlink()
+                except Exception as e:
+                    print(f"Warning: Could not delete chunk file {chunk_file}: {e}")
+
+    except Exception as e:
+        print(f"Error analyzing audio with Hume: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "predictions": []
+        }
+
+
+async def _analyze_single_audio(wav_file_path: str, hume_api_key: str) -> Dict[str, Any]:
+    """
+    Analyze a single audio file (must be ≤5 seconds).
+
+    Internal function used by analyze_audio_with_hume.
+    """
+    try:
         client = AsyncHumeClient(api_key=hume_api_key)
-        model_config = Config(prosody=StreamProsody())
-        stream_options = StreamConnectOptions(config=model_config)
+        # Config with only prosody model
+        model_config = Config(prosody={})
 
-        async with client.expression_measurement.stream.connect(options=stream_options) as socket:
-            result = await socket.send_file(wav_file_path)
+        async with client.expression_measurement.stream.connect() as socket:
+            result = await socket.send_file(wav_file_path, config=model_config)
 
-            # Extract prosody predictions
+            # Check if result is an error
+            if hasattr(result, 'error'):
+                return {
+                    "success": False,
+                    "error": f"Hume API error: {result.error}",
+                    "predictions": []
+                }
+
+            # Check for warnings (like "No speech detected")
+            warning_msg = None
             if result and hasattr(result, 'prosody') and result.prosody:
-                predictions = result.prosody.predictions
+                if hasattr(result.prosody, 'warning') and result.prosody.warning:
+                    warning_msg = result.prosody.warning
+                    print(f"  ⚠️  Hume API warning: {warning_msg}")
 
-                # Format the results
-                formatted_results = []
-                for prediction in predictions:
+            # Extract prosody (speech emotion) predictions
+            if result and hasattr(result, 'prosody') and result.prosody:
+                prosody_preds = result.prosody.predictions
+
+                # Check if predictions exist and is not None
+                if not prosody_preds:
+                    error_msg = "No speech detected in audio"
+                    if warning_msg:
+                        error_msg = f"{error_msg} (Hume: {warning_msg})"
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "predictions": [],
+                        "warning": warning_msg
+                    }
+
+                predictions = []
+                for prediction in prosody_preds:
+                    # Sort emotions by score (highest first)
+                    sorted_emotions = sorted(
+                        prediction.emotions,
+                        key=lambda e: e.score,
+                        reverse=True
+                    )
+
                     pred_data = {
                         "time": {
                             "begin": prediction.time.begin if hasattr(prediction.time, 'begin') else None,
@@ -129,24 +570,31 @@ async def analyze_audio_with_hume(wav_file_path: str) -> Dict[str, Any]:
                         },
                         "emotions": [
                             {"name": emotion.name, "score": emotion.score}
-                            for emotion in prediction.emotions
+                            for emotion in sorted_emotions
+                        ],
+                        "top_3_emotions": [
+                            {"name": emotion.name, "score": emotion.score}
+                            for emotion in sorted_emotions[:3]
                         ]
                     }
-                    formatted_results.append(pred_data)
+                    predictions.append(pred_data)
 
                 return {
                     "success": True,
-                    "predictions": formatted_results,
-                    "total_predictions": len(formatted_results)
+                    "predictions": predictions,
+                    "total_predictions": len(predictions)
                 }
             else:
                 return {
                     "success": False,
-                    "error": "No prosody predictions returned",
+                    "error": "No prosody predictions returned from Hume API",
                     "predictions": []
                 }
+
     except Exception as e:
-        print(f"Error analyzing audio with Hume: {e}")
+        print(f"Error in _analyze_single_audio: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "error": str(e),
@@ -160,7 +608,9 @@ async def handle_audio_stream(
     sample_rate: int = Query(..., description="Audio sample rate in Hz"),
     uid: str = Query(..., description="User ID"),
     analyze_emotion: bool = Query(True, description="Whether to analyze emotions with Hume AI"),
-    save_to_gcs: bool = Query(True, description="Whether to save audio to Google Cloud Storage")
+    save_to_gcs: bool = Query(True, description="Whether to save audio to Google Cloud Storage"),
+    send_notification: bool = Query(False, description="Whether to send Omi notification for detected emotions"),
+    emotion_filters: Optional[str] = Query(None, description="JSON string of emotion filters, e.g. {\"Anger\":0.7,\"Sadness\":0.6}")
 ):
     """
     Endpoint to receive audio bytes from Omi device, optionally analyze with Hume AI and/or save to GCS.
@@ -170,11 +620,32 @@ async def handle_audio_stream(
         - uid: User unique ID
         - analyze_emotion: Whether to analyze emotions with Hume AI (default: True)
         - save_to_gcs: Whether to save audio to GCS (default: True)
+        - send_notification: Whether to send Omi notification (default: False)
+        - emotion_filters: JSON string of emotion:threshold pairs
+                          Examples:
+                          - '{"Anger":0.7}' - notify only if Anger >= 0.7
+                          - '{"Anger":0.7,"Sadness":0.6}' - notify if Anger >= 0.7 OR Sadness >= 0.6
+                          - null - notify for all detected emotions
 
     Body:
         - Binary audio data (application/octet-stream)
+
+    Examples:
+        # Basic emotion analysis
+        POST /audio?sample_rate=16000&uid=user123
+
+        # With notification for any emotion
+        POST /audio?sample_rate=16000&uid=user123&send_notification=true
+
+        # With notification only for high anger or sadness
+        POST /audio?sample_rate=16000&uid=user123&send_notification=true&emotion_filters={"Anger":0.7,"Sadness":0.6}
     """
     try:
+        # Update stats
+        audio_stats["total_requests"] += 1
+        audio_stats["last_request_time"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        audio_stats["last_uid"] = uid
+
         # Read audio bytes from request body
         audio_data = await request.body()
 
@@ -191,18 +662,81 @@ async def handle_audio_stream(
         # Combine header and audio data
         wav_data = wav_header + audio_data
 
-        # Write to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            temp_file.write(wav_data)
-            temp_file_path = temp_file.name
+        # Save to local audio_files directory
+        audio_dir = Path("audio_files")
+        audio_dir.mkdir(exist_ok=True)
+        local_file_path = audio_dir / filename
+
+        with open(local_file_path, 'wb') as f:
+            f.write(wav_data)
 
         try:
             # Analyze with Hume AI if requested
             hume_results = None
             if analyze_emotion:
                 print(f"Analyzing audio with Hume AI for user {uid}")
-                hume_results = await analyze_audio_with_hume(temp_file_path)
+                hume_results = await analyze_audio_with_hume(str(local_file_path))
                 print(f"Hume analysis complete: {hume_results.get('total_predictions', 0)} predictions")
+
+                # Update stats
+                if hume_results.get('success'):
+                    audio_stats["successful_analyses"] += 1
+                    # Extract top emotions from prosody predictions
+                    recent_emotions = []
+                    if hume_results.get('predictions'):
+                        for pred in hume_results['predictions']:
+                            if pred.get('top_3_emotions'):
+                                recent_emotions = [
+                                    f"{e['name']} ({e['score']:.2f})"
+                                    for e in pred['top_3_emotions']
+                                ]
+                                break
+                    if recent_emotions:
+                        audio_stats["recent_emotions"] = recent_emotions
+
+                    # Check emotion triggers and send notification if requested
+                    if send_notification and hume_results.get('predictions'):
+                        # Parse emotion filters if provided
+                        filters_dict = None
+                        if emotion_filters:
+                            try:
+                                filters_dict = json.loads(emotion_filters)
+                                print(f"Using emotion filters: {filters_dict}")
+                            except json.JSONDecodeError as e:
+                                print(f"Warning: Invalid emotion_filters JSON: {e}")
+
+                        # Check triggers
+                        trigger_result = check_emotion_triggers(
+                            hume_results['predictions'],
+                            filters_dict
+                        )
+
+                        if trigger_result['triggered']:
+                            print(f"🔔 Emotion trigger detected! {trigger_result['total_triggers']} emotions matched")
+
+                            # Format notification message
+                            emotion_names = [e['name'] for e in trigger_result['emotions'][:3]]
+                            emotion_str = ", ".join(emotion_names)
+                            notification_msg = f"🎭 Emotion Alert: Detected {emotion_str}"
+
+                            # Send notification
+                            notification_result = await send_omi_notification(uid, notification_msg)
+
+                            # Add to response
+                            hume_results['notification_sent'] = notification_result.get('success', False)
+                            hume_results['triggered_emotions'] = trigger_result['emotions']
+
+                            if notification_result.get('success'):
+                                print(f"✓ Notification sent successfully")
+                            else:
+                                print(f"✗ Notification failed: {notification_result.get('error')}")
+                        else:
+                            print(f"ℹ️  No emotion triggers matched (filters: {filters_dict})")
+                            hume_results['notification_sent'] = False
+                            hume_results['trigger_check'] = "No emotions matched threshold"
+
+                else:
+                    audio_stats["failed_analyses"] += 1
 
             # Upload to GCS if requested
             gcs_path = None
@@ -212,7 +746,7 @@ async def handle_audio_stream(
                     print("Warning: GCS_BUCKET_NAME not set, skipping GCS upload")
                 else:
                     try:
-                        gcs_path = upload_to_gcs(temp_file_path, bucket_name, filename)
+                        gcs_path = upload_to_gcs(str(local_file_path), bucket_name, filename)
                         print(f"Audio file uploaded successfully: {gcs_path}")
                     except Exception as e:
                         print(f"Warning: Failed to upload to GCS: {e}")
@@ -224,7 +758,8 @@ async def handle_audio_stream(
                 "uid": uid,
                 "sample_rate": sample_rate,
                 "data_size_bytes": len(audio_data),
-                "timestamp": timestamp
+                "timestamp": timestamp,
+                "local_file_path": str(local_file_path.absolute())
             }
 
             # Add GCS path if available
@@ -239,15 +774,297 @@ async def handle_audio_stream(
                 status_code=200,
                 content=response_data
             )
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
+        except Exception as e:
+            # If there's an error, clean up the file
+            if local_file_path.exists():
+                local_file_path.unlink()
+            raise
 
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error processing audio: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Root endpoint with web interface"""
+    hume_configured = bool(os.getenv('HUME_API_KEY'))
+    gcs_configured = bool(os.getenv('GCS_BUCKET_NAME'))
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Omi Audio Streaming Service</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 20px;
+                background: #f5f5f5;
+            }}
+            .container {{
+                background: white;
+                border-radius: 10px;
+                padding: 30px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            h1 {{
+                color: #333;
+                margin-top: 0;
+            }}
+            .status {{
+                display: inline-block;
+                padding: 5px 12px;
+                border-radius: 5px;
+                font-weight: 600;
+                margin-left: 10px;
+            }}
+            .status.online {{
+                background: #d4edda;
+                color: #155724;
+            }}
+            .status.offline {{
+                background: #f8d7da;
+                color: #721c24;
+            }}
+            .config-section {{
+                background: #f8f9fa;
+                border-left: 4px solid #007bff;
+                padding: 15px;
+                margin: 20px 0;
+            }}
+            .stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin: 20px 0;
+            }}
+            .stat-card {{
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                border-left: 4px solid #28a745;
+            }}
+            .stat-value {{
+                font-size: 28px;
+                font-weight: bold;
+                color: #333;
+            }}
+            .stat-label {{
+                color: #666;
+                font-size: 14px;
+                margin-top: 5px;
+            }}
+            .endpoint {{
+                background: #e9ecef;
+                padding: 10px;
+                border-radius: 5px;
+                font-family: monospace;
+                margin: 10px 0;
+            }}
+            .emotions {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin: 15px 0;
+            }}
+            .emotion-tag {{
+                background: #007bff;
+                color: white;
+                padding: 5px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+            }}
+            .refresh-btn {{
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 20px;
+            }}
+            .refresh-btn:hover {{
+                background: #0056b3;
+            }}
+            .check {{
+                color: #28a745;
+                font-weight: bold;
+            }}
+            .cross {{
+                color: #dc3545;
+                font-weight: bold;
+            }}
+        </style>
+        <script>
+            function refreshPage() {{
+                location.reload();
+            }}
+            // Auto-refresh every 10 seconds
+            setTimeout(refreshPage, 10000);
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎤 Omi Audio Streaming Service <span class="status online">ONLINE</span></h1>
+
+            <div class="config-section">
+                <h3>⚙️ Configuration Status</h3>
+                <p><span class="{'check' if hume_configured else 'cross'}">{'✓' if hume_configured else '✗'}</span> Hume AI API Key: {'Configured' if hume_configured else 'Not configured'}</p>
+                <p><span class="{'check' if gcs_configured else 'cross'}">{'✓' if gcs_configured else '✗'}</span> Google Cloud Storage: {'Configured' if gcs_configured else 'Not configured (optional)'}</p>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value">{audio_stats['total_requests']}</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{audio_stats['successful_analyses']}</div>
+                    <div class="stat-label">Successful Analyses</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{audio_stats['failed_analyses']}</div>
+                    <div class="stat-label">Failed Analyses</div>
+                </div>
+            </div>
+
+            {f'''
+            <div style="margin: 20px 0;">
+                <h3>📊 Last Activity</h3>
+                <p><strong>Time:</strong> {audio_stats['last_request_time']}</p>
+                <p><strong>User ID:</strong> {audio_stats['last_uid']}</p>
+                {f'<div class="emotions">' + ''.join([f'<span class="emotion-tag">{e}</span>' for e in audio_stats['recent_emotions'][:5]]) + '</div>' if audio_stats['recent_emotions'] else ''}
+            </div>
+            ''' if audio_stats['last_request_time'] else '<p style="color: #666; margin: 20px 0;">No audio received yet. Waiting for Omi device to send data...</p>'}
+
+            <div class="config-section">
+                <h3>🔌 API Endpoints</h3>
+                <p><strong>Audio Upload (Prosody):</strong></p>
+                <div class="endpoint">POST /audio?sample_rate=16000&uid=your_user_id</div>
+                <p style="font-size: 12px; color: #666; margin: 5px 0;">Analyzes speech emotion from audio tone/pitch (≤5 seconds)</p>
+
+                <p><strong>Text Emotion Analysis:</strong></p>
+                <div class="endpoint">POST /analyze-text?uid=your_user_id</div>
+                <p style="font-size: 12px; color: #666; margin: 5px 0;">Analyzes emotion from text content (≤10,000 chars)</p>
+
+                <p><strong>Health Check:</strong></p>
+                <div class="endpoint">GET /health</div>
+
+                <p><strong>Status Dashboard:</strong></p>
+                <div class="endpoint">GET /status</div>
+            </div>
+
+            <div class="config-section">
+                <h3>📱 Configure Your Omi Device</h3>
+                <ol>
+                    <li>Open the <strong>Omi App</strong></li>
+                    <li>Go to <strong>Settings → Developer Mode</strong></li>
+                    <li>Set <strong>"Realtime audio bytes"</strong> to:</li>
+                    <div class="endpoint" id="audioUrl">{os.getenv('NGROK_URL', 'https://your-ngrok-url.ngrok-free.app')}/audio</div>
+                    <li>Set <strong>"Every x seconds"</strong> to <code>10</code></li>
+                </ol>
+            </div>
+
+            <button class="refresh-btn" onclick="refreshPage()">🔄 Refresh Status</button>
+            <p style="color: #666; font-size: 12px; margin-top: 20px;">Page auto-refreshes every 10 seconds</p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/status")
+async def get_status():
+    """Get current server status and stats"""
+    hume_configured = bool(os.getenv('HUME_API_KEY'))
+    gcs_configured = bool(os.getenv('GCS_BUCKET_NAME'))
+
+    return JSONResponse({
+        "status": "online",
+        "service": "omi-audio-streaming",
+        "configuration": {
+            "hume_ai": hume_configured,
+            "google_cloud_storage": gcs_configured
+        },
+        "stats": audio_stats
+    })
+
+
+@app.post("/analyze-text")
+async def analyze_text_emotion(
+    request: Request,
+    uid: Optional[str] = Query(None, description="User ID (optional)")
+):
+    """
+    Endpoint to analyze emotion from text using Hume AI Language model.
+
+    This analyzes emotional content based on word choice, phrasing, and linguistic patterns.
+    Use this endpoint with transcribed text from speech-to-text services.
+
+    Query Parameters:
+        - uid: User unique ID (optional)
+
+    Body (JSON):
+        {
+            "text": "Your text to analyze here",
+            "metadata": {...}  // optional metadata
+        }
+
+    Example curl:
+        curl -X POST "https://your-url/analyze-text?uid=user123" \
+             -H "Content-Type: application/json" \
+             -d '{"text": "I am feeling really happy and excited today!"}'
+    """
+    try:
+        # Parse JSON body
+        body = await request.json()
+        text = body.get('text')
+        metadata = body.get('metadata', {})
+
+        if not text:
+            raise HTTPException(status_code=400, detail="Missing 'text' field in request body")
+
+        # Check text length (API limit is 10,000 characters)
+        if len(text) > 10000:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text too long ({len(text)} characters). Maximum is 10,000 characters."
+            )
+
+        print(f"Analyzing text emotion for user: {uid or 'anonymous'}")
+        print(f"Text length: {len(text)} characters")
+        print(f"Text preview: {text[:100]}...")
+
+        # Analyze text with Hume AI
+        hume_results = await analyze_text_with_hume(text)
+
+        response_data = {
+            "message": "Text emotion analysis complete",
+            "text_length": len(text),
+            "uid": uid,
+            "hume_analysis": hume_results,
+            "metadata": metadata
+        }
+
+        return JSONResponse(
+            status_code=200,
+            content=response_data
+        )
+
+    except HTTPException:
+        raise
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in request body")
+    except Exception as e:
+        print(f"Error analyzing text: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
