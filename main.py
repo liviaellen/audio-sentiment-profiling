@@ -30,6 +30,9 @@ async def startup_event():
     print("🚀 Starting emotion memory background task (runs every 1 hour)...")
     asyncio.create_task(emotion_memory_background_task())
 
+    print("🗑️  Starting audio file cleanup task (runs every 1 minute)...")
+    asyncio.create_task(cleanup_old_audio_files())
+
 
 # Store recent audio processing stats
 audio_stats = {
@@ -110,8 +113,8 @@ def get_rizz_status_text(score: float) -> str:
 
 def get_rizz_notification_message(score: float, emotions: list) -> str:
     """
-    Generate a short notification message with rizz status and emotions.
-    Adds motivational messages for low rizz and positive messages for high rizz.
+    Generate a short notification message with rizz status, inspirational message, and emotions.
+    Format: Rizz score + Inspirational message + Emotions
 
     Args:
         score: Rizz score from -100 to 100
@@ -125,33 +128,41 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
     emotion_str = ", ".join(emotions)
     score_text = f"{score:.0f}%"
 
-    # Low rizz - add motivational message
+    # Low rizz - motivational messages
     if score < -20:
-        low_rizz_messages = [
+        messages = [
             "Level up bro! 💪",
             "Time to bounce back! 🚀",
             "Keep your head up! 💯",
             "You got this! 🔥",
             "Comeback mode! ⚡"
         ]
-        motivational = random.choice(low_rizz_messages)
-        return f"⚡ Rizz: {score_text} 😔 | {emotion_str} | {motivational}"
+        inspirational = random.choice(messages)
+        return f"⚡ Rizz: {score_text} | {inspirational} | {emotion_str}"
 
-    # Medium rizz - neutral
+    # Medium rizz - neutral messages
     elif score <= 20:
-        return f"⚡ Rizz: {score_text} 😐 | {emotion_str}"
+        messages = [
+            "Stay balanced! 🎯",
+            "Keep going! 💫",
+            "Stay steady! 🌊",
+            "Keep vibing! ✨",
+            "Stay cool! 😌"
+        ]
+        inspirational = random.choice(messages)
+        return f"⚡ Rizz: {score_text} | {inspirational} | {emotion_str}"
 
-    # High rizz - positive message
+    # High rizz - positive messages
     else:
-        high_rizz_messages = [
+        messages = [
             "Killing it! 🔥",
             "You're on fire! ⚡",
             "Peak vibes! 💯",
             "Keep it up! 🚀",
             "Boss mode! 😎"
         ]
-        positive = random.choice(high_rizz_messages)
-        return f"⚡ Rizz: {score_text} 😎 | {emotion_str} | {positive}"
+        inspirational = random.choice(messages)
+        return f"⚡ Rizz: {score_text} | {inspirational} | {emotion_str}"
 
 
 # Load emotion notification configuration
@@ -508,6 +519,47 @@ async def emotion_memory_background_task():
 
         except Exception as e:
             print(f"Error in emotion memory background task: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+async def cleanup_old_audio_files():
+    """Background task that deletes audio files older than 5 minutes"""
+    import asyncio
+    import time
+
+    while True:
+        try:
+            # Run cleanup every 1 minute
+            await asyncio.sleep(60)
+
+            audio_dir = Path("audio_files")
+            if not audio_dir.exists():
+                continue
+
+            current_time = time.time()
+            deleted_count = 0
+
+            # Check all wav files in audio_files directory
+            for audio_file in audio_dir.glob("*.wav"):
+                try:
+                    # Get file age in seconds
+                    file_age = current_time - audio_file.stat().st_mtime
+
+                    # Delete if older than 5 minutes (300 seconds)
+                    if file_age > 300:
+                        audio_file.unlink()
+                        deleted_count += 1
+                        print(f"🗑️  Deleted old audio file: {audio_file.name} (age: {file_age/60:.1f} minutes)")
+
+                except Exception as e:
+                    print(f"Warning: Could not delete audio file {audio_file}: {e}")
+
+            if deleted_count > 0:
+                print(f"✓ Cleanup complete: Deleted {deleted_count} audio file(s)")
+
+        except Exception as e:
+            print(f"Error in audio cleanup background task: {e}")
             import traceback
             traceback.print_exc()
 
@@ -1112,7 +1164,7 @@ async def root():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Rizz Meter - Emotion AI</title>
+        <title>⚡ Rizz Meter - Omi + Hume</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             body {{
@@ -1370,7 +1422,10 @@ async def root():
     </head>
     <body>
         <div class="container">
-            <h1>⚡ Rizz Meter <span class="status online">ONLINE</span></h1>
+            <h1>⚡ Rizz Meter <span style="font-size: 0.5em; color: #666;">Omi + Hume</span> <span class="status online">ONLINE</span></h1>
+            <p style="text-align: center; color: #666; font-size: 16px; margin: -10px 0 30px 0; font-style: italic;">
+                Emotion detection based on your tone and speech prosody
+            </p>
 
             <div class="config-section">
                 <h3>⚙️ Configuration Status</h3>
