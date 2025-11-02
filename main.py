@@ -1039,6 +1039,72 @@ async def root():
                 }}
             }}
 
+            // Load current config and pre-check boxes
+            async function loadCurrentConfig() {{
+                try {{
+                    const response = await fetch('/emotion-config');
+                    const data = await response.json();
+                    const thresholds = data.current_config.emotion_thresholds;
+
+                    document.querySelectorAll('.emotion-checkbox').forEach(checkbox => {{
+                        checkbox.checked = checkbox.value in thresholds;
+                    }});
+                }} catch (error) {{
+                    console.error('Error loading config:', error);
+                }}
+            }}
+
+            // Select all emotions
+            function selectAllEmotions() {{
+                document.querySelectorAll('.emotion-checkbox').forEach(cb => cb.checked = true);
+            }}
+
+            // Clear all emotions
+            function clearAllEmotions() {{
+                document.querySelectorAll('.emotion-checkbox').forEach(cb => cb.checked = false);
+            }}
+
+            // Save emotion configuration
+            async function saveEmotionConfig() {{
+                const checkboxes = document.querySelectorAll('.emotion-checkbox:checked');
+                const thresholds = {{}};
+
+                checkboxes.forEach(cb => {{
+                    thresholds[cb.value] = 0;
+                }});
+
+                const config = {{
+                    notification_enabled: true,
+                    emotion_thresholds: thresholds
+                }};
+
+                const statusEl = document.getElementById('saveStatus');
+                statusEl.textContent = 'Saving...';
+                statusEl.style.color = '#666';
+
+                try {{
+                    const response = await fetch('/emotion-config', {{
+                        method: 'POST',
+                        headers: {{'Content-Type': 'application/json'}},
+                        body: JSON.stringify(config)
+                    }});
+
+                    if (response.ok) {{
+                        statusEl.textContent = '✅ Configuration saved successfully!';
+                        statusEl.style.color = '#28a745';
+                        setTimeout(() => {{ statusEl.textContent = ''; }}, 3000);
+                    }} else {{
+                        throw new Error('Save failed');
+                    }}
+                }} catch (error) {{
+                    statusEl.textContent = '❌ Error saving configuration';
+                    statusEl.style.color = '#dc3545';
+                }}
+            }}
+
+            // Load config on page load
+            window.addEventListener('DOMContentLoaded', loadCurrentConfig);
+
             // Auto-refresh every 10 seconds
             setTimeout(refreshPage, 10000);
         </script>
@@ -1078,6 +1144,95 @@ async def root():
             ''' if audio_stats['last_request_time'] else '<p style="color: #666; margin: 20px 0;">No audio received yet. Waiting for Omi device to send data...</p>'}
 
             {emotion_stats_html}
+
+            <div class="config-section">
+                <h3>⚙️ Emotion Tracking Configuration</h3>
+                <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                    Select which emotions trigger notifications. Leave all unchecked for ALL emotions.
+                </p>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button onclick="selectAllEmotions()" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        ✓ Select All
+                    </button>
+                    <button onclick="clearAllEmotions()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        ✗ Clear All
+                    </button>
+                </div>
+
+                <div id="emotionSelector" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                    <!-- Positive Emotions -->
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Joy" class="emotion-checkbox">
+                        <span>😊 Joy</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Amusement" class="emotion-checkbox">
+                        <span>😄 Amusement</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Satisfaction" class="emotion-checkbox">
+                        <span>😌 Satisfaction</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Excitement" class="emotion-checkbox">
+                        <span>🤩 Excitement</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Desire" class="emotion-checkbox">
+                        <span>😍 Desire</span>
+                    </label>
+
+                    <!-- Negative Emotions -->
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Anger" class="emotion-checkbox">
+                        <span>😠 Anger</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Sadness" class="emotion-checkbox">
+                        <span>😢 Sadness</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Anxiety" class="emotion-checkbox">
+                        <span>😰 Anxiety</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Fear" class="emotion-checkbox">
+                        <span>😨 Fear</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Distress" class="emotion-checkbox">
+                        <span>😖 Distress</span>
+                    </label>
+
+                    <!-- Neutral Emotions -->
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Calmness" class="emotion-checkbox">
+                        <span>😌 Calmness</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Interest" class="emotion-checkbox">
+                        <span>🤔 Interest</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Surprise" class="emotion-checkbox">
+                        <span>😲 Surprise</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Contemplation" class="emotion-checkbox">
+                        <span>🤨 Contemplation</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 5px; cursor: pointer;">
+                        <input type="checkbox" name="emotion" value="Determination" class="emotion-checkbox">
+                        <span>😤 Determination</span>
+                    </label>
+                </div>
+
+                <button onclick="saveEmotionConfig()" class="refresh-btn" style="background: #007bff;">
+                    💾 Save Emotion Configuration
+                </button>
+                <p id="saveStatus" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
+            </div>
 
             <div class="config-section">
                 <h3>🔌 API Endpoints</h3>
