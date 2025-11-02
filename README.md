@@ -1,384 +1,441 @@
-# Omi Audio Streaming Service with Hume AI (Python)
+# 🎭 Omi Audio Emotion Analysis with Real-time Notifications
 
-A Python FastAPI service to receive real-time audio streams from Omi DevKit devices, analyze emotions using Hume AI's Speech Prosody model, and store them as WAV files in Google Cloud Storage.
+A Python FastAPI service that receives real-time audio from Omi devices, analyzes emotions using Hume AI, sends automatic notifications, and provides a beautiful dashboard with emotion statistics.
 
-## Features
+## ✨ Features
 
-- Receives raw audio bytes from Omi devices via POST requests
-- **Real-time emotion analysis** using Hume AI's Speech Prosody model
-- Automatically generates WAV headers for audio data
-- Uploads audio files to Google Cloud Storage
-- Supports both DevKit1 (8kHz/16kHz) and DevKit2 (16kHz) sample rates
-- Docker support for easy deployment
-- Health check endpoint
-- Returns detailed emotion predictions with timestamps
+- 🎤 **Real-time Audio Streaming** from Omi devices
+- 🧠 **Emotion Analysis** using Hume AI's Speech Prosody & Language models
+- 📱 **Automatic Notifications** via Omi app when emotions are detected
+- 📊 **Live Dashboard** with emotion statistics and percentages
+- ⚙️ **Configurable Thresholds** for emotion detection
+- 📈 **Emotion Tracking** with cumulative counts and visualizations
+- 🔄 **Auto-chunking** for audio files longer than 5 seconds
+- 🗑️ **Statistics Reset** button on dashboard
+- 💾 **Optional GCS Storage** for audio archives
+- 🐳 **Docker Support** for easy deployment
 
-## Prerequisites
+## 🚀 Quick Start
 
-### Required
-- Python 3.11+
-- **Hume AI account and API key** ([Get one here](https://www.hume.ai/))
+### 1. Get Your API Keys
 
-### Optional (for cloud storage)
-- Google Cloud Platform account
-- Google Cloud Storage bucket
-- GCP service account with Storage Object Creator permissions
-
-> **Note**: Google Cloud Storage is completely optional! You can use this service just for emotion analysis without storing files to GCS.
-
-## Setup Options
-
-Choose one of the setup methods below:
-
-### Option A: Hume AI Only (No GCS) - Simplest!
-
-Perfect if you just want emotion analysis without cloud storage.
-
-**1. Get Your Hume AI API Key** (2 minutes)
-
+#### Hume AI (Required)
 1. Sign up at [Hume AI](https://www.hume.ai/)
-2. Navigate to your dashboard
-3. Create an API key
-4. Copy your API key
+2. Create an API key from your dashboard
+3. Copy your key
 
-**2. Set Environment Variables**
+#### Omi Integration (Required for Notifications)
+1. Open **Omi mobile app**
+2. Go to **Apps** → **Create App**
+3. Select **External Integration** → **Notifications**
+4. Name it "Emotion AI Notifier"
+5. Copy your **App ID** and **API Key**
 
-```bash
-# Just set your Hume API key
-export HUME_API_KEY=your_hume_api_key_here
-```
+### 2. Deploy to Render
 
-**3. Install Dependencies**
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-```bash
-# Install only core dependencies (skip GCS packages if you want)
-pip install fastapi uvicorn[standard] hume
-```
-
-**4. Run the Server**
+**Set these environment variables in Render:**
 
 ```bash
-python main.py
+# Required
+HUME_API_KEY=your_hume_api_key
+OMI_APP_ID=your_omi_app_id
+OMI_API_KEY=your_omi_api_key
+
+# Optional (for GCS storage)
+GCS_BUCKET_NAME=your_bucket_name
+GOOGLE_APPLICATION_CREDENTIALS_JSON=base64_encoded_credentials
 ```
 
-**5. Configure Omi App**
+### 3. Configure Omi Device
 
-Set endpoint: `https://your-url/audio?save_to_gcs=false`
+In **Omi App → Settings → Developer Mode → "Realtime audio bytes":**
 
-That's it! Your audio will be analyzed but not stored.
-
----
-
-### Option B: Hume AI + Google Cloud Storage - Full Features
-
-Use this if you want both emotion analysis AND cloud storage.
-
-### 1. Create a GCS Bucket
-
-Follow the [Google Cloud Storage documentation](https://cloud.google.com/storage/docs/creating-buckets) to create a bucket.
-
-### 2. Create Service Account Credentials
-
-1. Go to [GCP Console](https://console.cloud.google.com)
-2. Navigate to **IAM & Admin > Service Accounts**
-3. Create a new service account
-4. Grant it the **Storage Object Creator** role
-5. Create and download a JSON key file
-
-### 3. Encode Credentials to Base64
-
-```bash
-# Linux/Mac
-base64 -i your-credentials.json -o credentials-base64.txt
-
-# Or use Python
-python -c "import base64; print(base64.b64encode(open('your-credentials.json', 'rb').read()).decode())"
+```
+https://your-app-name.onrender.com/audio
 ```
 
-### 4. Get Your Hume AI API Key
+That's it! No parameters needed. Notifications are automatic! 🎉
 
-1. Sign up at [Hume AI](https://www.hume.ai/)
-2. Navigate to your dashboard
-3. Create an API key
-4. Copy your API key for the next step
+## 🎯 How It Works
 
-### 5. Set Environment Variables
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env
+```
+User speaks → Omi records → Sends to your server
+                               ↓
+                    Analyze with Hume AI
+                               ↓
+                    Detect emotions in top 3
+                               ↓
+                    Match against configured list
+                               ↓
+              Send notification automatically!
+                               ↓
+              📱 User receives emotion alert
 ```
 
-Edit `.env` and set:
+## 📱 Notification System
 
-```bash
-GOOGLE_APPLICATION_CREDENTIALS_JSON=<your_base64_encoded_credentials>
-GCS_BUCKET_NAME=<your-bucket-name>
-HUME_API_KEY=<your_hume_api_key>
-```
+### Automatic Notifications
 
-## Local Development
+By default, notifications are sent for **ALL emotions** detected in the top 3. The system is configured in `emotion_config.json`:
 
-### Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### Run the Server
-
-```bash
-# Make sure environment variables are set
-export $(cat .env | xargs)
-
-# Run the server
-python main.py
-```
-
-The server will start on `http://localhost:8080`
-
-### Test the Endpoint
-
-```bash
-# Health check
-curl http://localhost:8080/health
-
-# Test audio upload (with sample audio data)
-curl -X POST "http://localhost:8080/audio?sample_rate=16000&uid=test-user-123" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary "@sample-audio.raw"
-```
-
-## Docker Deployment
-
-### Build the Image
-
-```bash
-docker build -t omi-audio-streaming .
-```
-
-### Run the Container
-
-```bash
-docker run -p 8080:8080 \
-  -e GOOGLE_APPLICATION_CREDENTIALS_JSON="<base64_encoded_credentials>" \
-  -e GCS_BUCKET_NAME="<your-bucket-name>" \
-  -e HUME_API_KEY="<your_hume_api_key>" \
-  omi-audio-streaming
-```
-
-## Cloud Deployment
-
-### Google Cloud Run
-
-```bash
-# Build and push to Google Container Registry
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/omi-audio-streaming
-
-# Deploy to Cloud Run
-gcloud run deploy omi-audio-streaming \
-  --image gcr.io/YOUR_PROJECT_ID/omi-audio-streaming \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars GOOGLE_APPLICATION_CREDENTIALS_JSON=<base64_credentials> \
-  --set-env-vars GCS_BUCKET_NAME=<bucket-name> \
-  --set-env-vars HUME_API_KEY=<your_hume_api_key>
-```
-
-### AWS/DigitalOcean/Other Platforms
-
-Deploy using Docker. Make sure to:
-1. Build the Docker image
-2. Push to your container registry
-3. Deploy with environment variables set
-4. Expose port 8080
-
-### Local Testing with Ngrok
-
-```bash
-# Install ngrok: https://ngrok.com/download
-
-# Run your local server
-python main.py
-
-# In another terminal, expose it
-ngrok http 8080
-```
-
-Use the ngrok URL as your endpoint in the Omi app.
-
-## Configure Omi App
-
-1. Open the Omi App on your device
-2. Go to **Settings > Developer Mode**
-3. Scroll to **Realtime audio bytes**
-4. Set your endpoint: `https://your-domain.com/audio`
-5. Set **Every x seconds** to your desired interval (e.g., 10)
-
-## API Endpoints
-
-### POST /audio
-
-Receives audio bytes from Omi device, analyzes emotions with Hume AI, and optionally stores to GCS.
-
-**Query Parameters:**
-- `sample_rate` (required): Audio sample rate in Hz (8000 or 16000)
-- `uid` (required): User unique ID
-- `analyze_emotion` (optional): Whether to analyze with Hume AI (default: true)
-- `save_to_gcs` (optional): Whether to save to Google Cloud Storage (default: true)
-
-**Request Body:**
-- Binary audio data (application/octet-stream)
-
-**Usage Examples:**
-- Emotion analysis only: `/audio?sample_rate=16000&uid=user123&save_to_gcs=false`
-- Storage only: `/audio?sample_rate=16000&uid=user123&analyze_emotion=false`
-- Both (default): `/audio?sample_rate=16000&uid=user123`
-
-**Response:**
 ```json
 {
-  "message": "Audio processed successfully",
-  "filename": "user123_20250102_143022_123456.wav",
-  "gcs_path": "gs://your-bucket/user123_20250102_143022_123456.wav",
-  "uid": "user123",
-  "sample_rate": 16000,
-  "data_size_bytes": 160000,
-  "timestamp": "20250102_143022_123456",
-  "hume_analysis": {
-    "success": true,
-    "total_predictions": 3,
-    "predictions": [
-      {
-        "time": {
-          "begin": 0.0,
-          "end": 2.5
-        },
-        "emotions": [
-          {"name": "Joy", "score": 0.85},
-          {"name": "Excitement", "score": 0.72},
-          {"name": "Calmness", "score": 0.45}
-        ]
-      }
-    ]
+  "notification_enabled": true,
+  "emotion_thresholds": {},
+  "notification_message_template": "🎭 Emotion Alert: Detected {emotions}"
+}
+```
+
+**Empty thresholds = notify for ALL top 3 emotions!**
+
+### Customize Which Emotions Trigger Notifications
+
+Edit `emotion_config.json` to notify only for specific emotions:
+
+```json
+{
+  "notification_enabled": true,
+  "emotion_thresholds": {
+    "Joy": 0.5,
+    "Anger": 0.6,
+    "Sadness": 0.5
   }
 }
 ```
 
-### GET /health
+### Configuration Methods
 
-Health check endpoint.
+**Method 1: File (Recommended)**
+- Edit `emotion_config.json`
+- Commit and redeploy
+
+**Method 2: API**
+```bash
+# View config
+curl https://your-app.onrender.com/emotion-config
+
+# Update config
+curl -X POST https://your-app.onrender.com/emotion-config \
+  -H "Content-Type: application/json" \
+  -d '{"notification_enabled": true, "emotion_thresholds": {"Joy": 0.5}}'
+```
+
+**Method 3: Environment Variable**
+```bash
+EMOTION_NOTIFICATION_CONFIG={"notification_enabled":true,"emotion_thresholds":{"Anger":0.7}}
+```
+
+## 📊 Dashboard Features
+
+Access at: `https://your-app.onrender.com/`
+
+### What You'll See:
+
+- ✅ **Configuration Status** - Hume AI & GCS setup
+- 📈 **Request Statistics** - Total, successful, failed analyses
+- 🕒 **Last Activity** - Most recent request with emotions
+- 🎭 **Emotion Statistics** - Cumulative counts and percentages with visual bars
+- 🗑️ **Reset Button** - Clear all statistics
+- 🔄 **Auto-refresh** - Updates every 10 seconds
+
+### Example Dashboard View:
+
+```
+🎤 Omi Audio Streaming Service ONLINE
+
+⚙️ Configuration Status
+✓ Hume AI API Key: Configured
+✗ Google Cloud Storage: Not configured (optional)
+
+16 Total Requests | 12 Successful | 4 Failed
+
+📊 Last Activity
+Time: 2025-11-02 18:52:54 UTC
+User ID: XqBKRatqZ5MS4tsX84VfBEne16W2
+[Joy (0.23)] [Calmness (0.18)] [Interest (0.15)]
+
+🎭 Emotion Statistics
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Joy            Count: 15 | 25.0% ████████████████
+Calmness       Count: 12 | 20.0% ██████████████
+Interest       Count: 10 | 16.7% ████████████
+Excitement     Count: 8  | 13.3% █████████
+Satisfaction   Count: 7  | 11.7% ████████
+```
+
+## 🔧 API Endpoints
+
+### POST /audio
+Receives and analyzes audio from Omi device.
+
+**Query Parameters:**
+- `sample_rate` (required): 8000 or 16000 Hz
+- `uid` (required): User ID
+- `analyze_emotion` (optional, default: true)
+- `save_to_gcs` (optional, default: true)
+- `send_notification` (optional, uses config default)
+- `emotion_filters` (optional, JSON): Override config filters
+
+**Example:**
+```bash
+curl -X POST "https://your-app.onrender.com/audio?sample_rate=16000&uid=user123" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary "@audio.wav"
+```
+
+### POST /analyze-text
+Analyzes emotion from text content.
+
+**Body:**
+```json
+{
+  "text": "I am so excited about this project!"
+}
+```
 
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "service": "omi-audio-streaming"
+  "success": true,
+  "emotions": [
+    {"name": "Excitement", "score": 0.85},
+    {"name": "Joy", "score": 0.72},
+    {"name": "Interest", "score": 0.65}
+  ]
 }
 ```
 
-## Audio Format
+### GET /emotion-config
+View current notification configuration.
 
-- **Format:** WAV (PCM)
-- **Channels:** Mono (1)
-- **Bit Depth:** 16-bit
-- **Sample Rate:** 8000 Hz (DevKit1 v1.0.2) or 16000 Hz (DevKit1 v1.0.4+, DevKit2)
+### POST /emotion-config
+Update notification configuration.
 
-## File Naming Convention
+### POST /reset-stats
+Reset all statistics (confirmation required).
 
-Audio files are saved with the following naming pattern:
+### GET /status
+Get server status and statistics (JSON).
+
+### GET /health
+Health check endpoint.
+
+## 🎭 Available Emotions
+
+Hume AI detects 48+ emotions including:
+
+**Positive:** Joy, Amusement, Satisfaction, Excitement, Pride, Triumph, Relief, Romance, Desire, Admiration, Adoration
+
+**Negative:** Anger, Sadness, Fear, Disgust, Anxiety, Distress, Shame, Guilt, Embarrassment, Contempt
+
+**Neutral:** Calmness, Concentration, Contemplation, Determination, Interest, Surprise, Confusion, Realization
+
+## 📋 Configuration Examples
+
+### Example 1: Safety Monitoring
+```json
+{
+  "emotion_thresholds": {
+    "Anger": 0.8,
+    "Fear": 0.85,
+    "Distress": 0.8
+  }
+}
 ```
-{uid}_{timestamp}.wav
+→ Only high-intensity negative emotions
+
+### Example 2: Mental Health Support
+```json
+{
+  "emotion_thresholds": {
+    "Sadness": 0.5,
+    "Anxiety": 0.55,
+    "Distress": 0.5
+  }
+}
+```
+→ Early detection of emotional distress
+
+### Example 3: Positive Reinforcement
+```json
+{
+  "emotion_thresholds": {
+    "Joy": 0.7,
+    "Pride": 0.75,
+    "Triumph": 0.8
+  }
+}
+```
+→ Celebrate achievements!
+
+### Example 4: All Emotions (Default)
+```json
+{
+  "emotion_thresholds": {}
+}
+```
+→ Notify for ALL top 3 emotions
+
+## 🐳 Local Development
+
+### Prerequisites
+- Python 3.11+
+- ffmpeg (for audio processing)
+
+### Setup
+
+```bash
+# Clone repo
+git clone <your-repo-url>
+cd audio-sentiment-profiling
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install ffmpeg
+brew install ffmpeg  # macOS
+# or
+sudo apt-get install ffmpeg  # Linux
+
+# Create .env file
+cp .env.example .env
+
+# Edit .env with your keys
+nano .env
 ```
 
-Example: `user123_20250102_143022_123456.wav`
+### Run Locally
 
-## How It Works: Omi + Hume AI Integration
+```bash
+python main.py
+```
 
-This service creates a seamless pipeline for real-time emotion analysis from Omi audio streams:
+Server runs at `http://localhost:8080`
 
-1. **Audio Capture**: Omi device captures audio and streams it to your endpoint
-2. **WAV Conversion**: Raw audio bytes are converted to WAV format with proper headers
-3. **Emotion Analysis**: Hume AI's Speech Prosody model analyzes the audio for emotional content
-4. **Storage**: Audio file is uploaded to Google Cloud Storage
-5. **Response**: Returns emotion predictions with timestamps and storage location
+### Test with ngrok
 
-### Emotion Analysis Details
+```bash
+# In one terminal
+python main.py
 
-Hume AI's Speech Prosody model analyzes:
-- **Vocal tone and pitch patterns**
-- **Speech rhythm and tempo**
-- **Energy and intensity**
-- **Pause patterns**
+# In another terminal
+ngrok http 8080
 
-The model can detect emotions like:
-- Joy, Sadness, Anger, Fear, Surprise
-- Excitement, Calmness, Anxiety, Confidence
-- And many more nuanced emotional states
+# Use ngrok URL in Omi app
+```
 
-Each prediction includes:
-- **Time range**: When in the audio the emotion was detected
-- **Emotion scores**: Confidence scores (0-1) for each detected emotion
-- **Multiple emotions**: Audio segments often contain multiple emotions simultaneously
+## 🔍 Troubleshooting
 
-### Use Cases
+### No Notifications Received?
 
-- **Mental health monitoring**: Track emotional patterns over time
-- **Customer service**: Analyze caller emotions during support interactions
-- **Voice journaling**: Detect emotional trends in personal recordings
-- **Communication coaching**: Get feedback on emotional delivery in speech
-- **Research**: Study emotional responses in various contexts
+**Check 1: Render Environment Variables**
+```bash
+# Verify these are set in Render Dashboard → Environment:
+OMI_APP_ID=...
+OMI_API_KEY=...
+```
 
-## Troubleshooting
+**Check 2: Omi App Enabled**
+- Open Omi mobile app
+- Go to **Apps** → Find your app
+- Make sure it's **ENABLED**
 
-### "GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable not set"
+**Check 3: Check Logs**
+Look for in Render logs:
+```
+🔔 Notification check: should_notify=True, has_predictions=True
+Using config emotion filters: {}
+📊 Trigger check result: triggered=True, count=3
+✓ Sent Omi notification to user
+```
 
-Make sure you've set the environment variable with your base64-encoded credentials.
+**Check 4: Verify URL**
+```
+✅ https://your-app.onrender.com/audio
+❌ https://your-app.onrender.com/audio?send_notification=true?sample_rate=16000
+```
+(No extra parameters needed!)
 
-### "Failed to decode credentials"
+### "No speech detected" Warnings
 
-Ensure your credentials are properly base64-encoded and the JSON is valid.
+- Speak clearly during recording
+- Check microphone permissions in Omi app
+- Test in quiet environment
+- Ensure Omi device is working properly
 
-### "GCS_BUCKET_NAME environment variable not set"
+### "Audio too long" Errors
 
-Set the `GCS_BUCKET_NAME` environment variable to your bucket name.
+Already fixed! The service automatically chunks audio >5 seconds into 4.5s segments.
 
-### "HUME_API_KEY environment variable not set"
+### Dashboard Not Showing Emotions
 
-Make sure you've set your Hume AI API key in the environment variables.
+- Hard refresh browser: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
+- Wait for auto-refresh (10 seconds)
+- Check `/status` endpoint for current stats
 
-### Audio files not appearing in GCS
+## 📚 Documentation
 
-- Check your service account has the correct permissions
-- Verify the bucket name is correct
-- Check server logs for error messages
+Detailed guides available in the `docs/` folder:
 
-### No emotion analysis in response
+- `AUTOMATIC_NOTIFICATIONS_SETUP.md` - Quick notification setup
+- `OMI_NOTIFICATIONS_GUIDE.md` - Complete notification guide
+- `OMI_APP_CONFIGURATION.md` - App configuration details
+- `HUME_API_LIMITS.md` - API limits and best practices
+- `TEXT_EMOTION_EXAMPLES.md` - Text analysis examples
+- `TROUBLESHOOTING.md` - Common issues and solutions
 
-- Verify your Hume API key is valid
-- Check if `analyze_emotion=false` was passed in the query parameters
-- Review server logs for Hume API errors
-- Ensure the audio file is not corrupted or too short
+## 🚀 Deployment
 
-### Hume API rate limits
+### Render (Recommended)
 
-Hume AI has rate limits on their API. If you're processing high volumes:
-- Implement request queuing
-- Add retry logic with exponential backoff
-- Consider caching results for duplicate audio
+1. Fork this repo
+2. Connect to Render
+3. Add environment variables
+4. Deploy!
 
-## License
+See `RENDER_DEPLOYMENT.md` for detailed steps.
 
-MIT
+### Docker
 
-## Contributing
+```bash
+docker build -t omi-emotion-ai .
+docker run -p 8080:8080 \
+  -e HUME_API_KEY=... \
+  -e OMI_APP_ID=... \
+  -e OMI_API_KEY=... \
+  omi-emotion-ai
+```
 
-Feel free to open issues or submit pull requests!
+## 🎯 Use Cases
 
-## Acknowledgments
+- 💙 **Mental Health Monitoring** - Track emotional patterns
+- 📞 **Customer Service** - Alert when customers are frustrated
+- 🎙️ **Voice Journaling** - Analyze emotional trends
+- 🗣️ **Communication Coaching** - Improve emotional delivery
+- 🔬 **Research** - Study emotional responses
 
-- [Omi](https://www.omi.me/) - For the amazing wearable AI device
-- [Hume AI](https://www.hume.ai/) - For the powerful emotion analysis API
-- [Google Cloud Platform](https://cloud.google.com/) - For reliable storage
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repo
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 🙏 Acknowledgments
+
+- [Omi](https://www.omi.me/) - Amazing wearable AI device
+- [Hume AI](https://www.hume.ai/) - Powerful emotion analysis
+- [Render](https://render.com/) - Easy cloud deployment
+
+---
+
+**Made with ❤️ for better emotional awareness**
+
+For questions or issues, please open an issue on GitHub!
