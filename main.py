@@ -27,7 +27,8 @@ audio_stats = {
     "failed_analyses": 0,
     "last_request_time": None,
     "last_uid": None,
-    "recent_emotions": []
+    "recent_emotions": [],
+    "emotion_counts": {}  # Track count of each emotion detected
 }
 
 # Load emotion notification configuration
@@ -734,6 +735,12 @@ async def handle_audio_stream(
                                     f"{e['name']} ({e['score']:.2f})"
                                     for e in pred['top_3_emotions']
                                 ]
+                                # Track emotion counts for statistics
+                                for emotion in pred['top_3_emotions']:
+                                    emotion_name = emotion['name']
+                                    if emotion_name not in audio_stats["emotion_counts"]:
+                                        audio_stats["emotion_counts"][emotion_name] = 0
+                                    audio_stats["emotion_counts"][emotion_name] += 1
                                 break
                     if recent_emotions:
                         audio_stats["recent_emotions"] = recent_emotions
@@ -845,6 +852,37 @@ async def root():
     hume_configured = bool(os.getenv('HUME_API_KEY'))
     gcs_configured = bool(os.getenv('GCS_BUCKET_NAME'))
 
+    # Build emotion statistics HTML
+    emotion_stats_html = ''
+    if audio_stats['emotion_counts']:
+        total_emotion_count = sum(audio_stats['emotion_counts'].values())
+        max_emotion_count = max(audio_stats['emotion_counts'].values())
+        sorted_emotions = sorted(audio_stats['emotion_counts'].items(), key=lambda x: x[1], reverse=True)[:12]
+
+        emotion_items = []
+        for emotion, count in sorted_emotions:
+            percentage = (count / total_emotion_count * 100)
+            bar_width = (count / max_emotion_count * 100)
+            emotion_items.append(f'''
+                <div class="emotion-stat-item">
+                    <div class="emotion-stat-name">{emotion}</div>
+                    <div class="emotion-stat-count">Count: {count} | {percentage:.1f}%</div>
+                    <div class="emotion-stat-bar">
+                        <div class="emotion-stat-fill" style="width: {bar_width:.1f}%"></div>
+                    </div>
+                </div>
+            ''')
+
+        emotion_stats_html = f'''
+            <div style="margin: 20px 0;">
+                <h3>🎭 Emotion Statistics</h3>
+                <p style="color: #666; font-size: 14px;">Cumulative counts and percentages of all detected emotions</p>
+                <div class="emotion-stats">
+                    {''.join(emotion_items)}
+                </div>
+            </div>
+        '''
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -932,6 +970,40 @@ async def root():
                 border-radius: 20px;
                 font-size: 12px;
             }}
+            .emotion-stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 10px;
+                margin: 15px 0;
+            }}
+            .emotion-stat-item {{
+                background: #f8f9fa;
+                padding: 10px;
+                border-radius: 5px;
+                border-left: 3px solid #007bff;
+            }}
+            .emotion-stat-name {{
+                font-weight: bold;
+                color: #333;
+                font-size: 14px;
+            }}
+            .emotion-stat-count {{
+                color: #666;
+                font-size: 12px;
+                margin-top: 5px;
+            }}
+            .emotion-stat-bar {{
+                background: #e9ecef;
+                height: 8px;
+                border-radius: 4px;
+                margin-top: 8px;
+                overflow: hidden;
+            }}
+            .emotion-stat-fill {{
+                background: linear-gradient(90deg, #007bff, #0056b3);
+                height: 100%;
+                transition: width 0.3s ease;
+            }}
             .refresh-btn {{
                 background: #007bff;
                 color: white;
@@ -995,6 +1067,8 @@ async def root():
                 {f'<div class="emotions">' + ''.join([f'<span class="emotion-tag">{e}</span>' for e in audio_stats['recent_emotions'][:5]]) + '</div>' if audio_stats['recent_emotions'] else ''}
             </div>
             ''' if audio_stats['last_request_time'] else '<p style="color: #666; margin: 20px 0;">No audio received yet. Waiting for Omi device to send data...</p>'}
+
+            {emotion_stats_html}
 
             <div class="config-section">
                 <h3>🔌 API Endpoints</h3>
