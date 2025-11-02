@@ -1,17 +1,6 @@
 {
   "notification_enabled": true,
-  "emotion_thresholds": {
-    "Joy": 0.0,
-    "Amusement": 0.0,
-    "Satisfaction": 0.0,
-    "Excitement": 0.0,
-    "Desire": 0.0,
-    "Anger": 0.0,
-    "Sadness": 0.0,
-    "Distress": 0.0,
-    "Anxiety": 0.0,
-    "Fear": 0.0
-  },
+  "emotion_thresholds": {},
   "notification_message_template": "🎭 Emotion Alert: Detected {emotions}",
-  "description": "Notify when these emotions appear in top 3 detected emotions (0.0 = any score)"
+  "description": "Empty thresholds = notify for ALL top 3 detected emotions"
 }
