@@ -90,6 +90,62 @@ def update_rizz_score(emotions: list):
     audio_stats["rizz_score"] = max(-100, min(100, audio_stats["rizz_score"] + adjustment))
 
 
+def get_rizz_status_text(score: float) -> str:
+    """
+    Get the rizz status text based on score.
+
+    Args:
+        score: Rizz score from -100 to 100
+
+    Returns:
+        Status text with emoji
+    """
+    if score > 20:
+        return "😎 Positive Vibes!"
+    elif score >= -20:
+        return "😐 Neutral Energy"
+    else:
+        return "😔 Negative Energy"
+
+
+def get_rizz_notification_message(score: float, emotions: list) -> str:
+    """
+    Generate a short notification message with rizz status and emotions.
+    Adds motivational messages for low rizz.
+
+    Args:
+        score: Rizz score from -100 to 100
+        emotions: List of emotion names (top 3)
+
+    Returns:
+        Formatted notification message
+    """
+    import random
+
+    emotion_str = ", ".join(emotions)
+    score_text = f"{score:.0f}%"
+
+    # Low rizz - add motivational message
+    if score < -20:
+        low_rizz_messages = [
+            "Level up bro! 💪",
+            "Time to bounce back! 🚀",
+            "Keep your head up! 💯",
+            "You got this! 🔥",
+            "Comeback mode! ⚡"
+        ]
+        motivational = random.choice(low_rizz_messages)
+        return f"⚡ Rizz: {score_text} 😔 | {emotion_str} | {motivational}"
+
+    # Medium rizz - neutral
+    elif score <= 20:
+        return f"⚡ Rizz: {score_text} 😐 | {emotion_str}"
+
+    # High rizz - positive
+    else:
+        return f"⚡ Rizz: {score_text} 😎 | {emotion_str}"
+
+
 # Load emotion notification configuration
 def load_emotion_config():
     """Load emotion notification configuration from file or environment"""
@@ -932,10 +988,12 @@ async def handle_audio_stream(
                         if trigger_result['triggered']:
                             print(f"🔔 Emotion trigger detected! {trigger_result['total_triggers']} emotions matched")
 
-                            # Format notification message
+                            # Format notification message: Rizz first + emotions + motivational if needed
                             emotion_names = [e['name'] for e in trigger_result['emotions'][:3]]
-                            emotion_str = ", ".join(emotion_names)
-                            notification_msg = f"🎭 Emotion Alert: Detected {emotion_str}"
+                            notification_msg = get_rizz_notification_message(
+                                audio_stats['rizz_score'],
+                                emotion_names
+                            )
 
                             # Send notification
                             notification_result = await send_omi_notification(uid, notification_msg)
