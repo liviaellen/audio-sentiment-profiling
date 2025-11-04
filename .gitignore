@@ -48,13 +48,26 @@ service-account*.json
 # Logs
 *.log
 
-# Audio files
-*.wav
-*.mp3
-*.m4a
-audio/
+# Audio files (keep audio_files folder structure but ignore contents)
+audio_files/*.wav
+audio_files/*.mp3
+audio_files/*.m4a
+!audio_files/.gitkeep
 
 # Temporary files
 temp/
 tmp/
 *.tmp
+
+# Mac system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Test outputs
+.pytest_cache/
+.coverage
