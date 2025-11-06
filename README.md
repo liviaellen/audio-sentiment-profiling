@@ -10,6 +10,9 @@ A Python FastAPI service that receives real-time audio from Omi devices, analyze
 ### Omi Mobile App Notification
 <img src="./image/omi phone ss.png" alt="Omi Phone Notification" width="300"/>
 
+### App Setup Video
+[📹 Watch Setup Tutorial](./video/rizz-omi-setup.mov)
+
 ## ✨ Features
 
 - 🎤 **Real-time Audio Streaming** from Omi devices
@@ -587,7 +590,6 @@ audio-sentiment-profiling/
 │   ├── API Endpoints (/audio, /status, etc.)
 │   └── Dashboard HTML
 ├── emotion_config.json        # Emotion detection configuration
-├── manifest.json              # Omi plugin manifest
 ├── setup.py                   # Python package setup
 ├── requirements.txt           # Python dependencies
 ├── Dockerfile                 # Docker configuration
