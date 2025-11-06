@@ -20,51 +20,157 @@ A Python FastAPI service that receives real-time audio from Omi devices, analyze
 - 📈 **Emotion Tracking** with cumulative counts and visualizations
 - 🔄 **Auto-chunking** for audio files longer than 5 seconds
 - 🗑️ **Statistics Reset** button on dashboard
-- 💾 **Optional GCS Storage** for audio archives
 - 🐳 **Docker Support** for easy deployment
 
 ## 🚀 Quick Start
 
-### 1. Get Your API Keys
+Choose your deployment method:
 
-#### Hume AI (Required)
-1. Sign up at [Hume AI](https://www.hume.ai/)
-2. Create an API key from your dashboard
-3. Copy your key
+### Option A: Deploy to Render (Easiest - 5 minutes)
 
-#### Omi Integration (Required for Notifications)
-1. Open **Omi mobile app**
-2. Go to **Apps** → **Create App**
-3. Select **External Integration** → **Notifications**
-4. Name it "Emotion AI Notifier"
-5. Copy your **App ID** and **API Key**
+**Step 1: Get Your API Keys**
 
-### 2. Deploy to Render
+1. **Hume AI** (Required)
+   - Sign up at [Hume AI](https://www.hume.ai/)
+   - Create an API key from your dashboard
+   - Copy your key
+
+2. **Omi Integration** (Required for Notifications)
+   - Open **Omi mobile app**
+   - Go to **Apps** → **Create App**
+   - Select **External Integration** → **Notifications**
+   - Name it "Emotion AI Notifier"
+   - Copy your **App ID** and **API Key**
+
+**Step 2: Deploy to Render**
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-**Set these environment variables in Render:**
+1. Click the "Deploy to Render" button above
+2. Connect your GitHub account
+3. Set these environment variables in Render:
+   ```bash
+   # Required
+   HUME_API_KEY=your_hume_api_key
+   OMI_APP_ID=your_omi_app_id
+   OMI_API_KEY=your_omi_api_key
+   ```
+4. Click "Create Web Service"
+5. Wait for deployment to complete (~5 minutes)
+
+**Step 3: Configure Omi Device**
+
+1. Copy your Render app URL: `https://your-app-name.onrender.com`
+2. Open **Omi mobile app**
+3. Go to **Settings** → **Developer Mode**
+4. Enable **Developer Mode**
+5. Under **"Realtime audio bytes"**, enter:
+   ```
+   https://your-app-name.onrender.com/audio
+   ```
+6. Save and start using your Omi device!
+
+**Step 4: Verify It's Working**
+
+1. Open your dashboard: `https://your-app-name.onrender.com`
+2. Speak into your Omi device
+3. Check the dashboard for emotion statistics
+4. You should receive notifications in the Omi app!
+
+---
+
+### Option B: Run Locally (For Development - 10 minutes)
+
+**Step 1: Clone and Install**
 
 ```bash
-# Required
-HUME_API_KEY=your_hume_api_key
-OMI_APP_ID=your_omi_app_id
-OMI_API_KEY=your_omi_api_key
+# Clone repository
+git clone https://github.com/your-username/audio-sentiment-profiling.git
+cd audio-sentiment-profiling
 
-# Optional (for GCS storage)
-GCS_BUCKET_NAME=your_bucket_name
-GOOGLE_APPLICATION_CREDENTIALS_JSON=base64_encoded_credentials
+# Install dependencies
+pip install -r requirements.txt
+
+# Install ffmpeg
+brew install ffmpeg  # macOS
+sudo apt-get install ffmpeg  # Linux
 ```
 
-### 3. Configure Omi Device
+**Step 2: Configure Environment**
 
-In **Omi App → Settings → Developer Mode → "Realtime audio bytes":**
+```bash
+# Copy example environment file
+cp .env.example .env
 
+# Edit .env with your API keys
+nano .env
 ```
-https://your-app-name.onrender.com/audio
+
+Add your keys to `.env`:
+```bash
+HUME_API_KEY=your_hume_api_key_here
+OMI_APP_ID=your_omi_app_id_here
+OMI_API_KEY=your_omi_api_key_here
 ```
 
-That's it! No parameters needed. Notifications are automatic! 🎉
+**Step 3: Start the Server**
+
+```bash
+# Option 1: Direct run
+python main.py
+
+# Option 2: Using start script
+./start_server.sh
+```
+
+Server will start at `http://localhost:8080`
+
+**Step 4: Expose with ngrok (for Omi device to connect)**
+
+```bash
+# In a new terminal
+ngrok http 8080
+
+# Copy the ngrok URL (e.g., https://abc123.ngrok.io)
+```
+
+**Step 5: Configure Omi App**
+
+1. Open **Omi mobile app**
+2. Go to **Settings** → **Developer Mode**
+3. Under **"Realtime audio bytes"**, enter:
+   ```
+   https://your-ngrok-url.ngrok.io/audio
+   ```
+4. Save and test!
+
+**Step 6: Test It**
+
+1. Open `http://localhost:8080` in your browser
+2. Speak into your Omi device
+3. Watch the dashboard update in real-time!
+
+---
+
+### Option C: Docker (For Containerized Deployment)
+
+```bash
+# Build image
+docker build -t omi-emotion-ai .
+
+# Run container
+docker run -d -p 8080:8080 \
+  -e HUME_API_KEY=your_key \
+  -e OMI_APP_ID=your_app_id \
+  -e OMI_API_KEY=your_api_key \
+  --name omi-emotion \
+  omi-emotion-ai
+
+# View logs
+docker logs -f omi-emotion
+```
+
+Then configure Omi app to point to your Docker host's URL.
 
 ## 🎯 How It Works
 
@@ -115,25 +221,83 @@ Edit `emotion_config.json` to notify only for specific emotions:
 
 ### Configuration Methods
 
-**Method 1: File (Recommended)**
-- Edit `emotion_config.json`
-- Commit and redeploy
+**Method 1: Environment Variable (Recommended for Cloud/Render)**
 
-**Method 2: API**
+Best for persistent configuration that survives restarts.
+
+In Render Dashboard → Environment:
+```bash
+EMOTION_NOTIFICATION_CONFIG={"notification_enabled":true,"emotion_thresholds":{"Joy":0.5,"Anger":0.7}}
+```
+
+**Method 2: File (Local Development Only)**
+
+Edit `emotion_config.json` and restart server:
+```json
+{
+  "notification_enabled": true,
+  "emotion_thresholds": {
+    "Joy": 0.5,
+    "Anger": 0.7
+  }
+}
+```
+
+**Method 3: API (Temporary - Lost on Restart)**
+
+For testing only - changes are lost when container restarts:
 ```bash
 # View config
 curl https://your-app.onrender.com/emotion-config
 
-# Update config
+# Update config (temporary!)
 curl -X POST https://your-app.onrender.com/emotion-config \
   -H "Content-Type: application/json" \
   -d '{"notification_enabled": true, "emotion_thresholds": {"Joy": 0.5}}'
 ```
 
-**Method 3: Environment Variable**
+⚠️ **Note**: API changes don't persist in cloud deployments. Use environment variables for permanent configuration.
+
+### How to Update Configuration on Render
+
+**Option 1: Update Environment Variable (Permanent)**
+
+Changes persist across restarts:
+
+1. Go to **Render Dashboard**
+2. Select your service
+3. Click **Environment** tab
+4. Find `EMOTION_NOTIFICATION_CONFIG`
+5. Click **Edit**
+6. Update the JSON value:
+   ```json
+   {"notification_enabled":true,"emotion_thresholds":{"Joy":0.6,"Anger":0.8}}
+   ```
+7. Click **Save**
+8. Render will automatically redeploy (~2-3 minutes)
+
+✅ Permanent - survives restarts
+
+**Option 2: Use API Endpoint (Temporary)**
+
+Instant update without redeploying:
+
 ```bash
-EMOTION_NOTIFICATION_CONFIG={"notification_enabled":true,"emotion_thresholds":{"Anger":0.7}}
+curl -X POST https://your-app-name.onrender.com/emotion-config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_enabled": true,
+    "emotion_thresholds": {
+      "Joy": 0.6,
+      "Anger": 0.8
+    }
+  }'
 ```
+
+✅ Instant - takes effect immediately
+❌ Temporary - lost on restart/redeploy
+
+**Good for:** Quick testing and trying different thresholds before committing
 
 ## 📊 Dashboard Features
 
@@ -141,7 +305,7 @@ Access at: `https://your-app.onrender.com/`
 
 ### What You'll See:
 
-- ✅ **Configuration Status** - Hume AI & GCS setup
+- ✅ **Configuration Status** - Hume AI & Omi setup
 - 📈 **Request Statistics** - Total, successful, failed analyses
 - 🕒 **Last Activity** - Most recent request with emotions
 - 🎭 **Emotion Statistics** - Cumulative counts and percentages with visual bars
@@ -155,7 +319,7 @@ Access at: `https://your-app.onrender.com/`
 
 ⚙️ Configuration Status
 ✓ Hume AI API Key: Configured
-✗ Google Cloud Storage: Not configured (optional)
+✓ Omi Integration: Configured
 
 16 Total Requests | 12 Successful | 4 Failed
 
@@ -173,62 +337,6 @@ Excitement     Count: 8  | 13.3% █████████
 Satisfaction   Count: 7  | 11.7% ████████
 ```
 
-## 🔧 API Endpoints
-
-### POST /audio
-Receives and analyzes audio from Omi device.
-
-**Query Parameters:**
-- `sample_rate` (required): 8000 or 16000 Hz
-- `uid` (required): User ID
-- `analyze_emotion` (optional, default: true)
-- `save_to_gcs` (optional, default: true)
-- `send_notification` (optional, uses config default)
-- `emotion_filters` (optional, JSON): Override config filters
-
-**Example:**
-```bash
-curl -X POST "https://your-app.onrender.com/audio?sample_rate=16000&uid=user123" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary "@audio.wav"
-```
-
-### POST /analyze-text
-Analyzes emotion from text content.
-
-**Body:**
-```json
-{
-  "text": "I am so excited about this project!"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "emotions": [
-    {"name": "Excitement", "score": 0.85},
-    {"name": "Joy", "score": 0.72},
-    {"name": "Interest", "score": 0.65}
-  ]
-}
-```
-
-### GET /emotion-config
-View current notification configuration.
-
-### POST /emotion-config
-Update notification configuration.
-
-### POST /reset-stats
-Reset all statistics (confirmation required).
-
-### GET /status
-Get server status and statistics (JSON).
-
-### GET /health
-Health check endpoint.
 
 ## 🎭 Available Emotions
 
@@ -286,53 +394,59 @@ Hume AI detects 48+ emotions including:
 ```
 → Notify for ALL top 3 emotions
 
-## 🐳 Local Development
+## ⚙️ Advanced Configuration
 
-### Prerequisites
-- Python 3.11+
-- ffmpeg (for audio processing)
+### Emotion Thresholds
 
-### Setup
+You can customize which emotions trigger notifications by editing `emotion_config.json`:
 
-```bash
-# Clone repo
-git clone <your-repo-url>
-cd audio-sentiment-profiling
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install ffmpeg
-brew install ffmpeg  # macOS
-# or
-sudo apt-get install ffmpeg  # Linux
-
-# Create .env file
-cp .env.example .env
-
-# Edit .env with your keys
-nano .env
+**Notify for ALL emotions (default):**
+```json
+{
+  "notification_enabled": true,
+  "emotion_thresholds": {}
+}
 ```
 
-### Run Locally
-
-```bash
-python main.py
+**Notify only for specific emotions:**
+```json
+{
+  "notification_enabled": true,
+  "emotion_thresholds": {
+    "Joy": 0.5,
+    "Anger": 0.6,
+    "Sadness": 0.5
+  }
+}
 ```
 
-Server runs at `http://localhost:8080`
+**Threshold Guidelines:**
+- 0.5-0.7: Moderate confidence
+- 0.7-0.85: High confidence
+- 0.85+: Very high confidence
 
-### Test with ngrok
+### Environment Variables
+
+All available environment variables:
 
 ```bash
-# In one terminal
-python main.py
-
-# In another terminal
-ngrok http 8080
-
-# Use ngrok URL in Omi app
+# Required
+HUME_API_KEY=your_hume_api_key_here          # From platform.hume.ai
+OMI_APP_ID=your_omi_app_id_here              # From Omi mobile app
+OMI_API_KEY=your_omi_api_key_here            # From Omi mobile app
 ```
+
+### API Endpoints
+
+**Main Endpoints:**
+- `POST /audio` - Receive audio from Omi (main webhook)
+- `GET /` - Dashboard with statistics
+- `GET /health` - Health check
+- `GET /status` - JSON status and stats
+- `POST /analyze-text` - Analyze text emotions
+- `GET /emotion-config` - View notification config
+- `POST /emotion-config` - Update notification config
+- `POST /reset-stats` - Reset all statistics
 
 ## 🔍 Troubleshooting
 
@@ -385,25 +499,39 @@ Already fixed! The service automatically chunks audio >5 seconds into 4.5s segme
 
 ## 📚 Documentation
 
-Detailed guides available in the `docs/` folder:
+Additional guides in the `docs/` folder:
 
-- `AUTOMATIC_NOTIFICATIONS_SETUP.md` - Quick notification setup
-- `OMI_NOTIFICATIONS_GUIDE.md` - Complete notification guide
-- `OMI_APP_CONFIGURATION.md` - App configuration details
-- `HUME_API_LIMITS.md` - API limits and best practices
-- `TEXT_EMOTION_EXAMPLES.md` - Text analysis examples
-- `TROUBLESHOOTING.md` - Common issues and solutions
+- [`HUME_API_LIMITS.md`](docs/HUME_API_LIMITS.md) - API limits and best practices
+- [`TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) - Common issues and solutions
+
+## 📁 Project Structure
+
+```
+audio-sentiment-profiling/
+├── main.py                    # Main FastAPI server
+├── emotion_config.json        # Emotion detection configuration
+├── manifest.json              # Omi plugin manifest
+├── setup.py                   # Python package setup
+├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Docker configuration
+├── render.yaml                # Render deployment config
+├── start_server.sh            # Server startup script
+├── docs/                      # Documentation
+├── tests/                     # Test files
+├── image/                     # Screenshots
+└── video/                     # Demo videos
+```
 
 ## 🚀 Deployment
 
 ### Render (Recommended)
 
 1. Fork this repo
-2. Connect to Render
-3. Add environment variables
+2. Click "Deploy to Render" button above
+3. Add environment variables in Render dashboard
 4. Deploy!
 
-See `RENDER_DEPLOYMENT.md` for detailed steps.
+Your app will be live at: `https://your-app-name.onrender.com`
 
 ### Docker
 
@@ -424,17 +552,35 @@ docker run -p 8080:8080 \
 - 🗣️ **Communication Coaching** - Improve emotional delivery
 - 🔬 **Research** - Study emotional responses
 
+## 🧪 Testing
+
+Run tests to verify your setup:
+
+```bash
+# Test notification sending
+python tests/test_notification.py
+
+# Test audio chunking
+python tests/test_chunking.py path/to/audio.wav
+
+# Quick Omi notification test
+python tests/test_omi_now.py
+```
+
 ## 🤝 Contributing
 
 Contributions welcome! Please:
 1. Fork the repo
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Submit a pull request
+4. Run tests to ensure everything works
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](LICENSE) file for details
 
 ## 🙏 Acknowledgments
 

@@ -1,7 +1,7 @@
 {
   "id": "audio-emotion-analysis",
   "name": "Audio Emotion Analysis",
-  "author": "Your Name",
+  "author": "Livia Ellen",
   "description": "Real-time emotion analysis for audio using Hume AI with automatic notifications",
   "version": "1.0.0",
   "capabilities": [

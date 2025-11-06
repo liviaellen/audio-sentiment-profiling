@@ -9,13 +9,13 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="omi-audio-emotion-analysis",
     version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Livia Ellen",
+    author_email="",
     description="Real-time emotion analysis for Omi audio using Hume AI",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/audio-sentiment-profiling",
-    packages=find_packages(),
+    url="https://github.com/your-username/audio-sentiment-profiling",
+    py_modules=["main"],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -26,9 +26,4 @@ setup(
     ],
     python_requires=">=3.11",
     install_requires=requirements,
-    entry_points={
-        "console_scripts": [
-            "omi-emotion-server=main:main",
-        ],
-    },
 )
