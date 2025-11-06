@@ -5,14 +5,11 @@ Includes: Audio processing, Hume AI integration, Omi notifications, etc.
 
 import os
 import json
-import base64
 import tempfile
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 
-from google.cloud import storage
-from google.oauth2 import service_account
 from hume import AsyncHumeClient
 from hume.expression_measurement.stream import StreamLanguage
 from hume.expression_measurement.stream.stream.types import Config
@@ -170,29 +167,6 @@ def create_wav_header(sample_rate: int, data_size: int) -> bytes:
     return bytes(header)
 
 
-def upload_to_gcs(file_path: str, bucket_name: str, destination_blob_name: str) -> str:
-    """Upload a file to Google Cloud Storage (DEPRECATED - not used)"""
-    try:
-        credentials_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
-        if not credentials_json:
-            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON not set")
-
-        credentials_bytes = base64.b64decode(credentials_json)
-        credentials_dict = json.loads(credentials_bytes)
-        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
-
-        client = storage.Client(credentials=credentials, project=credentials_dict.get('project_id'))
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(destination_blob_name)
-
-        blob.upload_from_filename(file_path)
-
-        return f"gs://{bucket_name}/{destination_blob_name}"
-
-    except Exception as e:
-        raise Exception(f"Failed to upload to GCS: {str(e)}")
-
-
 async def cleanup_old_audio_files():
     """Background task to clean up old audio files every minute"""
     import asyncio
@@ -285,6 +259,7 @@ async def create_omi_memory(
 ) -> Dict[str, Any]:
     """Create a memory in Omi app"""
     import httpx
+    from urllib.parse import quote
 
     app_id = app_id or os.getenv('OMI_APP_ID')
     api_key = api_key or os.getenv('OMI_API_KEY')
@@ -296,7 +271,8 @@ async def create_omi_memory(
         }
 
     try:
-        url = f"https://api.omi.me/v1/integrations/{app_id}/memories?uid={uid}"
+        # Use v2 API endpoint with structured_memory
+        url = f"https://api.omi.me/v2/integrations/{app_id}/structured_memory?uid={quote(uid)}"
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -304,12 +280,12 @@ async def create_omi_memory(
         }
 
         payload = {
-            "text": text,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "overview": text,
+            "category": "personal",
+            "structured": {
+                "emotions": emotions if emotions else []
+            }
         }
-
-        if emotions:
-            payload["emotions"] = emotions
 
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=payload, timeout=30.0)

@@ -638,6 +638,10 @@ async def analyze_text_emotion(
     """
     Analyze emotion from text using Hume AI Language model.
 
+    ⚠️ NOTE: This endpoint has NOT been tested yet.
+    It's available for future use if you want to combine audio + text emotion analysis.
+    Currently, the /audio endpoint only processes audio (speech prosody).
+
     Body (JSON):
     {
         "text": "Your text here...",
