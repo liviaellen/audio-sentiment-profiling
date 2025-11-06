@@ -934,19 +934,17 @@ async def handle_audio_stream(
     sample_rate: int = Query(..., description="Audio sample rate in Hz"),
     uid: str = Query(..., description="User ID"),
     analyze_emotion: bool = Query(True, description="Whether to analyze emotions with Hume AI"),
-    save_to_gcs: bool = Query(True, description="Whether to save audio to Google Cloud Storage"),
     send_notification: Optional[bool] = Query(None, description="Override notification setting (uses config default if not specified)"),
     emotion_filters: Optional[str] = Query(None, description="Override emotion filters (uses config default if not specified)")
 ):
     """
-    Endpoint to receive audio bytes from Omi device, optionally analyze with Hume AI and/or save to GCS.
+    Endpoint to receive audio bytes from Omi device and analyze with Hume AI.
 
     Query Parameters:
         - sample_rate: Audio sample rate (e.g., 8000 or 16000)
         - uid: User unique ID
         - analyze_emotion: Whether to analyze emotions with Hume AI (default: True)
-        - save_to_gcs: Whether to save audio to GCS (default: True)
-        - send_notification: Whether to send Omi notification (default: False)
+        - send_notification: Whether to send Omi notification (uses config default if not specified)
         - emotion_filters: JSON string of emotion:threshold pairs
                           Examples:
                           - '{"Anger":0.7}' - notify only if Anger >= 0.7
@@ -1087,19 +1085,6 @@ async def handle_audio_stream(
                 else:
                     audio_stats["failed_analyses"] += 1
 
-            # Upload to GCS if requested
-            gcs_path = None
-            if save_to_gcs:
-                bucket_name = os.getenv('GCS_BUCKET_NAME')
-                if not bucket_name:
-                    print("Warning: GCS_BUCKET_NAME not set, skipping GCS upload")
-                else:
-                    try:
-                        gcs_path = upload_to_gcs(str(local_file_path), bucket_name, filename)
-                        print(f"Audio file uploaded successfully: {gcs_path}")
-                    except Exception as e:
-                        print(f"Warning: Failed to upload to GCS: {e}")
-                        # Continue processing even if GCS upload fails
 
             response_data = {
                 "message": "Audio processed successfully",
@@ -1110,10 +1095,6 @@ async def handle_audio_stream(
                 "timestamp": timestamp,
                 "local_file_path": str(local_file_path.absolute())
             }
-
-            # Add GCS path if available
-            if gcs_path:
-                response_data["gcs_path"] = gcs_path
 
             # Add Hume results if available
             if hume_results:
@@ -1140,7 +1121,7 @@ async def handle_audio_stream(
 async def root():
     """Root endpoint with web interface"""
     hume_configured = bool(os.getenv('HUME_API_KEY'))
-    gcs_configured = bool(os.getenv('GCS_BUCKET_NAME'))
+    omi_configured = bool(os.getenv('OMI_APP_ID') and os.getenv('OMI_API_KEY'))
 
     # Build emotion statistics HTML
     emotion_stats_html = ''
@@ -1482,7 +1463,7 @@ async def root():
             <div class="config-section">
                 <h3>⚙️ Configuration Status</h3>
                 <p><span class="{'check' if hume_configured else 'cross'}">{'✓' if hume_configured else '✗'}</span> Hume AI API Key: {'Configured' if hume_configured else 'Not configured'}</p>
-                <p><span class="{'check' if gcs_configured else 'cross'}">{'✓' if gcs_configured else '✗'}</span> Google Cloud Storage: {'Configured' if gcs_configured else 'Not configured (optional)'}</p>
+                <p><span class="{'check' if omi_configured else 'cross'}">{'✓' if omi_configured else '✗'}</span> Omi Integration: {'Configured' if omi_configured else 'Not configured'}</p>
             </div>
 
             <div class="stats">
@@ -1662,6 +1643,7 @@ async def root():
                 <button class="refresh-btn" onclick="resetStats()" style="background: #dc3545;">🗑️ Reset Statistics</button>
             </div>
             <p id="memoryStatus" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
+            {'<p style="color: #28a745; font-size: 13px; margin-top: 10px;">✓ User ID: ' + audio_stats.get("last_uid", "Not available") + '</p>' if audio_stats.get("last_uid") else '<p style="color: #ff9800; font-size: 13px; margin-top: 10px;">⚠️ No audio received yet. Speak into your Omi device first.</p>'}
             <p style="color: #666; font-size: 12px; margin-top: 10px;">Page auto-refreshes every 10 seconds</p>
         </div>
     </body>
@@ -1674,14 +1656,14 @@ async def root():
 async def get_status():
     """Get current server status and stats"""
     hume_configured = bool(os.getenv('HUME_API_KEY'))
-    gcs_configured = bool(os.getenv('GCS_BUCKET_NAME'))
+    omi_configured = bool(os.getenv('OMI_APP_ID') and os.getenv('OMI_API_KEY'))
 
     return JSONResponse({
         "status": "online",
         "service": "omi-audio-streaming",
         "configuration": {
             "hume_ai": hume_configured,
-            "google_cloud_storage": gcs_configured
+            "omi_integration": omi_configured
         },
         "stats": audio_stats
     })
