@@ -493,8 +493,13 @@ async def root():
     <body>
         <div class="container">
             <h1>🎤 Omi Audio Streaming Service ONLINE</h1>
-            <p style="text-align: center; color: #999; font-size: 13px; margin: 0 0 30px 0;">
+            <p style="text-align: center; color: #999; font-size: 13px; margin: 0 0 10px 0;">
                 Developer: Livia Ellen
+            </p>
+            <p style="text-align: center; font-size: 13px; margin: 0 0 30px 0;">
+                <a href="https://www.hume.ai/products/speech-prosody-model" target="_blank" style="color: #667eea; text-decoration: none;">
+                    🧠 Learn how we detect rizz + vibe + emotion using Hume AI Speech Prosody →
+                </a>
             </p>
 
             <div class="config-section">
