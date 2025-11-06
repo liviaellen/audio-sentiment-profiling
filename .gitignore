@@ -71,3 +71,7 @@ __pycache__/
 # Test outputs
 .pytest_cache/
 .coverage
+
+# Backup files
+*.backup
+main.py.backup
