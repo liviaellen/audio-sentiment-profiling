@@ -599,11 +599,9 @@ async def root():
             <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
                 <button class="refresh-btn" onclick="refreshPage()">🔄 Refresh Status</button>
                 <button class="refresh-btn" onclick="forceSendNotification()" style="background: #ff6b35;">🔔 Send Notification</button>
-                <button class="refresh-btn" onclick="saveEmotionMemory()" style="background: #28a745;">💾 Save to Memories</button>
                 <button class="refresh-btn" onclick="resetStats()" style="background: #dc3545;">🗑️ Reset Statistics</button>
             </div>
             <p id="notificationStatus" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
-            <p id="memoryStatus" style="color: #666; font-size: 14px; margin-top: 5px;"></p>
             {'<p style="color: #28a745; font-size: 13px; margin-top: 10px;">✓ User ID: ' + audio_stats.get("last_uid", "Not available") + '</p>' if audio_stats.get("last_uid") else '<p style="color: #ff9800; font-size: 13px; margin-top: 10px;">⚠️ No audio received yet. Speak into your Omi device first.</p>'}
             <p style="color: #666; font-size: 12px; margin-top: 10px;">Page auto-refreshes every 10 seconds</p>
         </div>
