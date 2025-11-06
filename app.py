@@ -259,7 +259,6 @@ async def create_omi_memory(
 ) -> Dict[str, Any]:
     """Create a memory in Omi app"""
     import httpx
-    from urllib.parse import quote
 
     app_id = app_id or os.getenv('OMI_APP_ID')
     api_key = api_key or os.getenv('OMI_API_KEY')
@@ -271,8 +270,7 @@ async def create_omi_memory(
         }
 
     try:
-        # Use v2 API endpoint with structured_memory
-        url = f"https://api.omi.me/v2/integrations/{app_id}/structured_memory?uid={quote(uid)}"
+        url = f"https://api.omi.me/v1/integrations/{app_id}/memories?uid={uid}"
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -280,12 +278,12 @@ async def create_omi_memory(
         }
 
         payload = {
-            "overview": text,
-            "category": "personal",
-            "structured": {
-                "emotions": emotions if emotions else []
-            }
+            "text": text,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
         }
+
+        if emotions:
+            payload["emotions"] = emotions
 
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=payload, timeout=30.0)
