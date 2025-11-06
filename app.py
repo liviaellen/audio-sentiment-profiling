@@ -45,8 +45,27 @@ audio_stats = {
     "recent_emotions": [],
     "emotion_counts": {},
     "rizz_score": 75,
-    "recent_notifications": []
+    "recent_notifications": [],
+    "last_notification_time": None
 }
+
+# Notification cooldown in seconds (configurable)
+NOTIFICATION_COOLDOWN_SECONDS = 30
+
+
+def can_send_notification() -> bool:
+    """Check if enough time has passed since last notification"""
+    if audio_stats["last_notification_time"] is None:
+        return True
+
+    time_since_last = (datetime.utcnow() - audio_stats["last_notification_time"]).total_seconds()
+    return time_since_last >= NOTIFICATION_COOLDOWN_SECONDS
+
+
+def update_notification_time():
+    """Update the last notification timestamp"""
+    audio_stats["last_notification_time"] = datetime.utcnow()
+
 
 # Load emotion configuration
 def load_emotion_config():
@@ -317,23 +336,39 @@ def generate_emotion_summary() -> Dict[str, Any]:
             "error": "No emotion data available"
         }
 
+    # Get current date and time
+    now = datetime.utcnow()
+    date_str = now.strftime("%Y-%m-%d")
+    time_str = now.strftime("%H:%M:%S UTC")
+
+    # Get top 3 emotions from aggregated stats
     sorted_emotions = sorted(
         audio_stats["emotion_counts"].items(),
         key=lambda x: x[1],
         reverse=True
-    )[:5]
+    )[:3]
 
     total_count = sum(audio_stats["emotion_counts"].values())
 
-    summary_parts = []
+    # Build top 3 emotions list
+    top_3_emotions = []
     emotions_list = []
 
     for emotion, count in sorted_emotions:
         percentage = (count / total_count) * 100
-        summary_parts.append(f"{emotion} ({percentage:.1f}%)")
+        top_3_emotions.append(f"{emotion} ({percentage:.1f}%)")
         emotions_list.append({"name": emotion, "count": count, "percentage": percentage})
 
-    summary = f"Emotion Summary: {', '.join(summary_parts)}"
+    # Get rizz score and status
+    rizz_score = audio_stats.get("rizz_score", 75)
+    rizz_status = get_rizz_status_text(rizz_score)
+
+    # Build memory summary
+    summary = f"""📅 {date_str} at {time_str}
+
+Top 3 Emotions: {', '.join(top_3_emotions)}
+
+Rizz {rizz_score:.0f}% - {rizz_status}"""
 
     return {
         "success": True,

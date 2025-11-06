@@ -29,6 +29,9 @@ from app import (
     update_rizz_score,
     get_rizz_status_text,
     get_rizz_notification_message,
+    can_send_notification,
+    update_notification_time,
+    NOTIFICATION_COOLDOWN_SECONDS,
 
     # Audio processing
     create_wav_header,
@@ -198,18 +201,22 @@ async def handle_audio_stream(
                             triggered_emotions = trigger_result["emotions"]
                             emotion_names = [e["name"] for e in triggered_emotions[:3]]
 
-                            message_template = EMOTION_CONFIG.get("notification_message_template", "🎭 Emotion Alert: Detected {emotions}")
-                            message = message_template.format(emotions=", ".join(emotion_names))
+                            # Check cooldown before sending notification
+                            if can_send_notification():
+                                message = get_rizz_notification_message(audio_stats["rizz_score"], triggered_emotions)
 
-                            notification_result = await send_omi_notification(uid, message)
+                                notification_result = await send_omi_notification(uid, message)
 
-                            if notification_result.get("success"):
-                                audio_stats["recent_notifications"].append({
-                                    "uid": uid,
-                                    "emotions": emotion_names,
-                                    "timestamp": datetime.utcnow().isoformat()
-                                })
-                                audio_stats["recent_notifications"] = audio_stats["recent_notifications"][-10:]
+                                if notification_result.get("success"):
+                                    update_notification_time()
+                                    audio_stats["recent_notifications"].append({
+                                        "uid": uid,
+                                        "emotions": emotion_names,
+                                        "timestamp": datetime.utcnow().isoformat()
+                                    })
+                                    audio_stats["recent_notifications"] = audio_stats["recent_notifications"][-10:]
+                            else:
+                                print(f"⏳ Notification cooldown active. Skipping notification.")
 
                 else:
                     audio_stats["failed_analyses"] += 1
@@ -430,6 +437,32 @@ async def root():
                 }}
             }}
 
+            async function forceSendNotification() {{
+                const statusEl = document.getElementById('notificationStatus');
+                statusEl.textContent = '🔔 Sending notification...';
+                statusEl.style.color = '#666';
+
+                try {{
+                    const response = await fetch('/force-send-notification', {{
+                        method: 'POST'
+                    }});
+
+                    const data = await response.json();
+
+                    if (response.ok) {{
+                        statusEl.textContent = `✅ Notification sent! "${{data.notification_message}}"`;
+                        statusEl.style.color = '#28a745';
+                        setTimeout(() => {{ statusEl.textContent = ''; }}, 5000);
+                    }} else {{
+                        statusEl.textContent = `❌ ${{data.message || 'Failed to send'}}`;
+                        statusEl.style.color = '#dc3545';
+                    }}
+                }} catch (error) {{
+                    statusEl.textContent = `❌ Error: ${{error.message}}`;
+                    statusEl.style.color = '#dc3545';
+                }}
+            }}
+
             async function saveEmotionMemory() {{
                 const statusEl = document.getElementById('memoryStatus');
                 statusEl.textContent = '💾 Saving emotion summary to memories...';
@@ -519,12 +552,14 @@ async def root():
                 </ol>
             </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
                 <button class="refresh-btn" onclick="refreshPage()">🔄 Refresh Status</button>
+                <button class="refresh-btn" onclick="forceSendNotification()" style="background: #ff6b35;">🔔 Send Notification</button>
                 <button class="refresh-btn" onclick="saveEmotionMemory()" style="background: #28a745;">💾 Save to Memories</button>
                 <button class="refresh-btn" onclick="resetStats()" style="background: #dc3545;">🗑️ Reset Statistics</button>
             </div>
-            <p id="memoryStatus" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
+            <p id="notificationStatus" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
+            <p id="memoryStatus" style="color: #666; font-size: 14px; margin-top: 5px;"></p>
             {'<p style="color: #28a745; font-size: 13px; margin-top: 10px;">✓ User ID: ' + audio_stats.get("last_uid", "Not available") + '</p>' if audio_stats.get("last_uid") else '<p style="color: #ff9800; font-size: 13px; margin-top: 10px;">⚠️ No audio received yet. Speak into your Omi device first.</p>'}
             <p style="color: #666; font-size: 12px; margin-top: 10px;">Page auto-refreshes every 10 seconds</p>
         </div>
@@ -736,6 +771,78 @@ async def manual_save_emotion_memory(uid: Optional[str] = Query(None, descriptio
             content={
                 "message": "Failed to save emotion memory",
                 "error": result.get("error")
+            }
+        )
+
+
+@app.post("/force-send-notification")
+async def force_send_notification_endpoint(uid: Optional[str] = Query(None, description="User ID (optional)")):
+    """
+    Force send a notification immediately, bypassing cooldown.
+
+    Query Parameters:
+        - uid: User ID (optional, uses last active user if not provided)
+    """
+    target_uid = uid or audio_stats.get("last_uid")
+
+    if not target_uid:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "message": "No user ID available. Please provide a UID or speak into your Omi device first.",
+                "success": False
+            }
+        )
+
+    # Get recent emotions for the notification
+    recent_emotions = audio_stats.get("recent_emotions", [])[:3]
+
+    if not recent_emotions:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "message": "No recent emotions detected. Please speak into your Omi device first.",
+                "success": False
+            }
+        )
+
+    # Generate message with current rizz score
+    message = get_rizz_notification_message(audio_stats["rizz_score"], recent_emotions)
+
+    # Send notification (force, ignore cooldown)
+    notification_result = await send_omi_notification(target_uid, message)
+
+    if notification_result.get("success"):
+        # Update notification time
+        update_notification_time()
+
+        # Log notification
+        emotion_names = [e.get("name") for e in recent_emotions]
+        audio_stats["recent_notifications"].append({
+            "uid": target_uid,
+            "emotions": emotion_names,
+            "timestamp": datetime.utcnow().isoformat(),
+            "forced": True
+        })
+        audio_stats["recent_notifications"] = audio_stats["recent_notifications"][-10:]
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Notification sent successfully",
+                "success": True,
+                "uid": target_uid,
+                "notification_message": message,
+                "emotions": emotion_names
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "message": "Failed to send notification",
+                "success": False,
+                "error": notification_result.get("error")
             }
         )
 
