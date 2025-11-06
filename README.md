@@ -538,12 +538,17 @@ Already fixed! The service automatically chunks audio >5 seconds into 4.5s segme
 - Wait for auto-refresh (10 seconds)
 - Check `/status` endpoint for current stats
 
-## 📚 Documentation
+## 💡 Important Notes
 
-Additional guides in the `docs/` folder:
+**Hume API Limits:**
+- Audio files must be ≤5 seconds for WebSocket API
+- Set "Every x seconds" to 5 in Omi app settings
+- The plugin auto-chunks longer audio files
 
-- [`HUME_API_LIMITS.md`](docs/HUME_API_LIMITS.md) - API limits and best practices
-- [`TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) - Common issues and solutions
+**Contributing:**
+- Fork the repo and create a feature branch
+- Test your changes thoroughly
+- Submit a pull request with a clear description
 
 ## 📁 Project Structure
 
@@ -565,10 +570,7 @@ audio-sentiment-profiling/
 ├── start_server.sh            # Server startup script
 ├── .env.example               # Environment variables template
 ├── LICENSE                    # MIT License
-├── CONTRIBUTING.md            # Contribution guidelines
-├── docs/                      # Documentation
-│   ├── HUME_API_LIMITS.md
-│   └── TROUBLESHOOTING.md
+├── README.md                  # Main documentation (this file)
 ├── tests/                     # Test scripts
 │   ├── test_chunking.py
 │   ├── test_notification.py
