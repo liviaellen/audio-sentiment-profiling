@@ -472,6 +472,25 @@ Since Hume AI predicts across 48 emotions, scores are typically lower:
 
 💡 **Tip**: Start with thresholds around 0.30-0.40 for reliable notifications
 
+### Notification Cooldown
+
+To prevent notification spam, the system enforces a **30-second cooldown** between automatic notifications. This means after sending a notification, the system will wait 30 seconds before sending another one, even if emotions are detected.
+
+**How to Change the Cooldown:**
+
+Edit `app.py` line 53:
+```python
+# Notification cooldown in seconds (configurable)
+NOTIFICATION_COOLDOWN_SECONDS = 30  # Change to your preferred interval
+```
+
+Examples:
+- `60` = 1 minute cooldown
+- `120` = 2 minutes cooldown
+- `300` = 5 minutes cooldown
+
+**Note:** The "🔔 Send Notification" button on the dashboard is for testing purposes and bypasses the cooldown to send immediately.
+
 ### Environment Variables
 
 All available environment variables:
