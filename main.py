@@ -548,13 +548,52 @@ async def root():
 
             <div class="config-section">
                 <h3>📱 Configure Your Omi Device</h3>
-                <ol style="line-height: 1.8;">
+                <p style="font-size: 14px; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>Step 1: Enable Audio Streaming</strong>
+                </p>
+                <ol style="line-height: 1.8; margin-bottom: 20px;">
                     <li>Open the <strong>Omi App</strong></li>
                     <li>Go to <strong>Settings → Developer Mode</strong></li>
+                    <li>Toggle <strong>Developer Mode ON</strong></li>
                     <li>Set <strong>"Realtime audio bytes"</strong> to:</li>
                     <div class="endpoint" id="audioUrl">{os.getenv('NGROK_URL', 'https://your-ngrok-url.ngrok-free.app')}/audio</div>
                     <li>Set <strong>"Every x seconds"</strong> to <code>5</code></li>
                 </ol>
+
+                <p style="font-size: 14px; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>Step 2: Create Integration App</strong>
+                </p>
+                <ol style="line-height: 1.8; margin-bottom: 20px;">
+                    <li>Go to <strong>Apps</strong> tab → Click <strong>Create App</strong></li>
+                    <li>Select <strong>External Integration</strong></li>
+                    <li>Toggle <strong>"Audio Bytes Trigger"</strong> ON</li>
+                    <li>Toggle <strong>"Create Memories"</strong> ON</li>
+                    <li>Set Webhook URL to the same audio endpoint above</li>
+                    <li>Save and <strong>Install the App</strong></li>
+                </ol>
+
+                <p style="font-size: 14px; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>Step 3: Update Environment Variables</strong>
+                </p>
+                <ol style="line-height: 1.8; margin-bottom: 20px;">
+                    <li>Copy your <strong>App ID</strong> and <strong>API Key</strong> from the app</li>
+                    <li>Go to <strong>Render Dashboard</strong> → Your Service → <strong>Environment</strong></li>
+                    <li>Add/Update these variables:
+                        <div style="background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace; font-size: 12px;">
+                            HUME_API_KEY=your_hume_api_key<br>
+                            OMI_APP_ID=your_omi_app_id<br>
+                            OMI_API_KEY=your_omi_api_key
+                        </div>
+                    </li>
+                    <li>Save changes and wait for auto-redeploy</li>
+                </ol>
+
+                <p style="font-size: 13px; color: #666; margin-top: 15px;">
+                    📖 For detailed setup instructions, see the
+                    <a href="https://github.com/liviaellen/audio-sentiment-profiling#readme" target="_blank" style="color: #667eea; text-decoration: none;">
+                        project README
+                    </a>
+                </p>
             </div>
 
             <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
