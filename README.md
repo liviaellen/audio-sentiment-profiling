@@ -58,17 +58,58 @@ Choose your deployment method:
 4. Click "Create Web Service"
 5. Wait for deployment to complete (~5 minutes)
 
-**Step 3: Configure Omi Device**
+**Step 3: Configure Omi App**
 
-1. Copy your Render app URL: `https://your-app-name.onrender.com`
-2. Open **Omi mobile app**
-3. Go to **Settings** → **Developer Mode**
-4. Enable **Developer Mode**
-5. Under **"Realtime audio bytes"**, enter:
+**Part A: Enable Audio Streaming**
+
+1. Open **Omi mobile app**
+2. Go to **Settings** → **Developer Mode**
+3. Toggle **Developer Mode** ON
+4. Scroll down to **"Realtime Audio Bytes"**
+5. Toggle **Enable** ON
+6. Enter your Render URL:
    ```
    https://your-app-name.onrender.com/audio
    ```
-6. Save and start using your Omi device!
+7. Set **"Every x seconds"** to `5`
+8. Click **Save**
+
+**Part B: Create Omi App for Notifications**
+
+1. In Omi app, go to **Apps** tab
+2. Click **Create App** (+ button)
+3. Select **External Integration**
+4. Configure the app:
+   - **Enable Memories**: Toggle ON
+   - **Trigger Event**: Select **Audio Bytes**
+   - **Webhook URL**:
+     ```
+     https://your-app-name.onrender.com/audio
+     ```
+   - **App Home URL**:
+     ```
+     https://your-app-name.onrender.com
+     ```
+5. Click **Save**
+6. Click **Install App**
+
+**Part C: Get API Credentials**
+
+1. After installing, go to **Manage Your App**
+2. Copy the **App ID** (you'll need this)
+3. Scroll down and click **Create API Key**
+4. Copy the **API Key** (you'll need this)
+
+**Part D: Update Render Environment Variables**
+
+1. Go to **Render Dashboard**
+2. Select your deployed service
+3. Click **Environment** tab
+4. Update these variables:
+   - `OMI_APP_ID` = paste your App ID
+   - `OMI_API_KEY` = paste your API Key
+5. Click **Save Changes**
+6. Wait for automatic redeploy (~2 minutes)
 
 **Step 4: Verify It's Working**
 
