@@ -462,9 +462,13 @@ You can customize which emotions trigger notifications by editing `emotion_confi
 ```
 
 **Threshold Guidelines:**
-- 0.5-0.7: Moderate confidence
-- 0.7-0.85: High confidence
-- 0.85+: Very high confidence
+
+Since Hume AI predicts across 48 emotions, scores are typically lower:
+- 0.30-0.50: Good detection (recommended range)
+- 0.50-0.70: Strong detection
+- 0.70+: Very strong detection (rare)
+
+💡 **Tip**: Start with thresholds around 0.30-0.40 for reliable notifications
 
 ### Environment Variables
 
@@ -623,17 +627,6 @@ python tests/test_chunking.py path/to/audio.wav
 # Quick Omi notification test
 python tests/test_omi_now.py
 ```
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests to ensure everything works
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
 
 ## 📄 License
 

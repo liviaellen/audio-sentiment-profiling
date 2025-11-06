@@ -1,0 +1,67 @@
+import os
+import base64
+import json
+import tempfile
+from datetime import datetime
+from typing import Optional, Dict, Any
+from pathlib import Path
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse
+from google.cloud import storage
+from google.oauth2 import service_account
+from hume import AsyncHumeClient
+from hume.expression_measurement.stream.stream.types import Config
+import uvicorn
+
+app = FastAPI(title="Omi Audio Streaming Service with Hume AI")
+
+
+# Startup event to launch background tasks
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background tasks on server startup"""
+    import asyncio
+
+    print("🚀 Starting emotion memory background task (runs every 1 hour)...")
+    asyncio.create_task(emotion_memory_background_task())
+
+    print("🗑️  Starting audio file cleanup task (runs every 1 minute)...")
+    asyncio.create_task(cleanup_old_audio_files())
+
+
+# Store recent audio processing stats
+audio_stats = {
+    "total_requests": 0,
+    "successful_analyses": 0,
+    "failed_analyses": 0,
+    "last_request_time": None,
+    "last_uid": None,
+    "recent_emotions": [],
+    "emotion_counts": {},  # Track count of each emotion detected
+    "rizz_score": 75,  # Rizz meter: 0 to 100 (starts at 75)
+    "recent_notifications": []  # Track last 10 notifications sent
+}
+
+# Emotion categories for Rizz Meter
+POSITIVE_EMOTIONS = {
+    "Joy", "Amusement", "Satisfaction", "Excitement", "Pride", "Triumph",
+    "Relief", "Romance", "Desire", "Admiration", "Adoration", "Love",
+    "Interest", "Realization", "Surprise"
+}
+
+NEGATIVE_EMOTIONS = {
+    "Anger", "Sadness", "Fear", "Disgust", "Anxiety", "Distress",
+    "Shame", "Guilt", "Embarrassment", "Contempt", "Disappointment",
+    "Pain", "Awkwardness", "Boredom", "Confusion", "Doubt", "Tiredness"
+}
+
+NEUTRAL_EMOTIONS = {
+    "Calmness", "Concentration", "Contemplation", "Determination"
+}
+
+
