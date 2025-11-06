@@ -549,7 +549,13 @@ Additional guides in the `docs/` folder:
 
 ```
 audio-sentiment-profiling/
-├── main.py                    # Main FastAPI server
+├── main.py                    # Main FastAPI server (1800+ lines)
+│   ├── Configuration & Setup
+│   ├── Audio Processing Functions
+│   ├── Hume AI Integration
+│   ├── Omi Notifications & Memories
+│   ├── API Endpoints (/audio, /status, etc.)
+│   └── Dashboard HTML
 ├── emotion_config.json        # Emotion detection configuration
 ├── manifest.json              # Omi plugin manifest
 ├── setup.py                   # Python package setup
@@ -557,8 +563,16 @@ audio-sentiment-profiling/
 ├── Dockerfile                 # Docker configuration
 ├── render.yaml                # Render deployment config
 ├── start_server.sh            # Server startup script
+├── .env.example               # Environment variables template
+├── LICENSE                    # MIT License
+├── CONTRIBUTING.md            # Contribution guidelines
 ├── docs/                      # Documentation
-├── tests/                     # Test files
+│   ├── HUME_API_LIMITS.md
+│   └── TROUBLESHOOTING.md
+├── tests/                     # Test scripts
+│   ├── test_chunking.py
+│   ├── test_notification.py
+│   └── test_omi_now.py
 ├── image/                     # Screenshots
 └── video/                     # Demo videos
 ```
