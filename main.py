@@ -283,6 +283,7 @@ async def root():
     rizz_score = audio_stats.get("rizz_score", 75)
     rizz_status = get_rizz_status_text(rizz_score)
     rizz_color = "#4CAF50" if rizz_score >= 60 else "#ff9800" if rizz_score >= 40 else "#f44336"
+    rizz_bg_color = "#2ecc71" if rizz_score >= 60 else "#f39c12" if rizz_score >= 40 else "#e74c3c"
 
     html_content = f"""
     <!DOCTYPE html>
@@ -370,12 +371,13 @@ async def root():
                 background: #5568d3;
             }}
             .rizz-meter {{
-                background: linear-gradient(to right, #f44336, #ff9800, #4CAF50);
+                background: {rizz_bg_color};
                 height: 30px;
                 border-radius: 15px;
                 position: relative;
                 margin: 20px 0;
                 overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             }}
             .rizz-indicator {{
                 position: absolute;

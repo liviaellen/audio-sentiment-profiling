@@ -117,7 +117,7 @@ def get_rizz_notification_message(score: float, emotions: list) -> str:
     """Generate notification message for rizz score update"""
     status = get_rizz_status_text(score)
     emotion_names = [e.get('name') for e in emotions[:3]]
-    return f"{status} | Detected: {', '.join(emotion_names)} | Score: {score:.0f}/100"
+    return f"Rizz {score:.0f}% - {status}, emotion: {', '.join(emotion_names)}"
 
 
 # ============================================================================

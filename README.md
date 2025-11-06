@@ -13,7 +13,7 @@ A Python FastAPI service that receives real-time audio from Omi devices, analyze
 ## ✨ Features
 
 - 🎤 **Real-time Audio Streaming** from Omi devices
-- 🧠 **Emotion Analysis** using Hume AI's Speech Prosody & Language models
+- 🧠 **Emotion Analysis** using [Hume AI's Speech Prosody Model](https://www.hume.ai/products/speech-prosody-model) & Language models
 - 📱 **Automatic Notifications** via Omi app when emotions are detected
 - 📊 **Live Dashboard** with emotion statistics and percentages
 - ⚙️ **Configurable Thresholds** for emotion detection
@@ -215,10 +215,12 @@ Then configure Omi app to point to your Docker host's URL.
 
 ## 🎯 How It Works
 
+This plugin uses [Hume AI's Speech Prosody Model](https://www.hume.ai/products/speech-prosody-model) to analyze vocal tone and emotion from audio recordings.
+
 ```
 User speaks → Omi records → Sends to your server
                                ↓
-                    Analyze with Hume AI
+            Analyze with Hume AI Speech Prosody
                                ↓
                     Detect emotions in top 3
                                ↓
